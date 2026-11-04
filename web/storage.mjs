@@ -14,21 +14,20 @@ export async function openLibrary(seed) {
   r.onblocked=()=>window.dispatchEvent(new CustomEvent('library-error',{detail:'Close other Hanzi Cards tabs, then reload.'}));
   db=await request(r); db.onversionchange=()=>db.close();
   const tx=db.transaction(['words','progress'],'readwrite');const done=completed(tx);
-  for(const word of seed) {
-    const lookup=tx.objectStore('words').get(word.id);
-    lookup.onsuccess=()=>{
-      if(!lookup.result) {
-        tx.objectStore('words').put(word);
-        tx.objectStore('progress').put({wordId:word.id,repetitions:0,interval:0,ease:2.5,due:0});
-      }
-    };
-  }
+  const existing=tx.objectStore('words').getAllKeys();
+  existing.onsuccess=()=>{
+    const ids=new Set(existing.result);
+    for(const word of seed){
+      tx.objectStore('words').put(word);
+      if(!ids.has(word.id))tx.objectStore('progress').put({wordId:word.id,repetitions:0,interval:0,ease:2.5,due:0});
+    }
+  };
   await done;
 }
 export async function snapshot() {
   const tx=db.transaction(['words','progress','reviews']); const done=completed(tx);
   const [words,progress,reviews]=await Promise.all(['words','progress','reviews'].map(n=>request(tx.objectStore(n).getAll())));
-  await done;return {version:1,exportedAt:new Date().toISOString(),words,progress,reviews};
+  await done;return {version:1,exportedAt:new Date().toISOString(),words,progress,reviews,attribution:[{source:'Complete HSK Vocabulary / CC-CEDICT',url:'https://github.com/drkameleon/complete-hsk-vocabulary',license:'CC BY-SA 4.0 (adapted dictionary fields)'},{source:'Vocab Bloom Hub',url:'https://huggingface.co/datasets/Fristail27/vocab-bloom-hub-en',license:'CC BY 4.0',notice:'AI-generated, not human-verified; translations and CEFR levels may contain errors.'}]};
 }
 export async function saveReview(card,rating,now=Date.now()) {
   if(!RATINGS.includes(rating))throw new Error('Unknown review rating');

@@ -6,6 +6,26 @@ handwriting practice with stroke-order animation.
 
 ## Install on iPhone from Safari
 
+The installed web app now has two independent courses: **10,969 Chinese → English
+words** (HSK 3.0 2021, HSK 1–6 plus a combined 7–9 band) and **5,973 English →
+Russian words** (community CEFR A1–C2). Choose a course and level above the cards.
+English translations and levels are AI-generated and not human-verified; they
+may contain errors. The existing six card IDs and review progress are preserved.
+
+**Audio settings** offers individual Chinese/English/Russian system voices and
+speed. Enhanced/Premium/Natural voices are preferred when the browser exposes
+them. English can use attributed human recordings via Free Dictionary API;
+recordings cache after download and fall back to system speech when unavailable.
+The first online lookup sends the English word to dictionaryapi.dev. Choose
+System voices only to disable recording lookups. Native iOS voice installation
+and Safari's exposed voice list remain controlled by iOS, not this website.
+
+Expanded words and all 2,970 Chinese stroke guides are bundled in compressed
+files (~1.5 MB total). This requires a browser with DecompressionStream support
+(modern Safari/iOS). See THIRD_PARTY_NOTICES.md for catalog licenses and sources.
+The React Native starter still has its original six-word demo; these expanded
+courses are delivered in the published iPhone web app.
+
 After enabling GitHub Pages, open **https://awesomesibyll-glitch.github.io/hanzi-cards/**
 in Safari. Tap **Share → Add to Home Screen → Add**.
 Keep **Open as Web App** enabled if Safari shows that option. Open the new icon

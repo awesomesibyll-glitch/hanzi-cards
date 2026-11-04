@@ -4,7 +4,7 @@
   "short_name": "Hanzi Cards",
   "description": "Offline Chinese flashcards and handwriting practice",
   "lang": "en",
-  "start_url": "./",
+  "start_url": "./study.html",
   "scope": "./",
   "display": "standalone",
   "background_color": "#f7f8f2",

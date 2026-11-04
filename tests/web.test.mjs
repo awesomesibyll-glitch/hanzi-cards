@@ -4,12 +4,14 @@ import { readFileSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
+import { gunzipSync } from 'node:zlib';
 import { validateBackup } from '../docs/storage.mjs';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
-const words=JSON.parse(readFileSync(resolve(root,'docs/data/words.json'),'utf8'));
+const catalog=JSON.parse(readFileSync(resolve(root,'docs/data/catalog.json'),'utf8'));
+const words=JSON.parse(gunzipSync(Buffer.concat(catalog.packs.words.map(file=>readFileSync(resolve(root,'docs/data',file))))).toString('utf8'));
 const valid=()=>({version:1,words,progress:words.map(w=>({wordId:w.id,repetitions:0,interval:0,ease:2.5,due:0})),reviews:[]});
 test('backup rejects corrupted or mismatched progress before database replacement',()=>{
-  assert.equal(validateBackup(valid()).words.length,6);
+  assert.ok(validateBackup(valid()).words.length>15000);
   const duplicate=valid();duplicate.words=[...words,words[0]];assert.throws(()=>validateBackup(duplicate));
   const bad=valid();bad.progress[0].due=NaN;assert.throws(()=>validateBackup(bad));
   const wrong=valid();wrong.progress[0].wordId='unknown';assert.throws(()=>validateBackup(wrong));
@@ -22,7 +24,7 @@ test('service worker precaches every required file and serves cached assets offl
   const self={addEventListener:(name,fn)=>listeners[name]=fn,skipWaiting:async()=>{},location:{origin:'https://example.test'},registration:{scope:base},clients:{claim:async()=>{claimed=true;}}};
   vm.runInNewContext(readFileSync(resolve(root,'docs/sw.js'),'utf8'),{self,URL,caches:{open:async()=>cache,keys:async()=>[],delete:async()=>true},fetch:async()=>{throw new Error('offline');}});
   let work;listeners.install({waitUntil:p=>work=p});await work;
-  assert.ok(requests.includes('./data/strokes.json'));assert.ok(requests.includes('./storage.mjs'));assert.ok(requests.includes('./modules/srs.mjs'));
+  assert.ok(requests.includes('./data/'+catalog.packs.strokes[0]));assert.ok(requests.includes('./data/'+catalog.packs.words[0]));assert.ok(requests.includes('./storage.mjs'));assert.ok(requests.includes('./audio.mjs'));assert.ok(requests.includes('./modules/srs.mjs'));
   listeners.activate({waitUntil:p=>work=p});await work;assert.ok(claimed);
   let response;listeners.fetch({request:{method:'GET',url:base+'app.mjs',mode:'cors'},respondWith:p=>response=p});assert.equal((await response).asset,'./app.mjs');
   response=null;listeners.fetch({request:{method:'GET',url:'https://external.test/file',mode:'cors'},respondWith:p=>response=p});assert.equal(response,null);
@@ -30,7 +32,7 @@ test('service worker precaches every required file and serves cached assets offl
 });
 test('manifest uses project-relative URLs and includes iPhone installation metadata',()=>{
   const manifest=JSON.parse(readFileSync(resolve(root,'docs/manifest.webmanifest'),'utf8'));
-  assert.equal(manifest.start_url,'./');assert.equal(manifest.scope,'./');assert.equal(manifest.display,'standalone');
+  assert.equal(manifest.start_url,'./study.html');assert.equal(manifest.scope,'./');assert.equal(manifest.display,'standalone');
   for(const icon of manifest.icons)assert.ok(existsSync(resolve(root,'docs',icon.src)));
   const html=readFileSync(resolve(root,'docs/index.html'),'utf8');assert.ok(html.includes('apple-touch-icon'));assert.ok(html.includes('viewport-fit=cover'));
 });

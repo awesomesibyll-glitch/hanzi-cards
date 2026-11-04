@@ -1,8 +1,0 @@
-[
-  {"id":"zh-en-ni","text":"你","reading":"nǐ","translation":"you","level":1,"topic":"People","sourceLanguage":"zh-CN","targetLanguage":"en-US"},
-  {"id":"zh-en-hao","text":"好","reading":"hǎo","translation":"good","level":1,"topic":"Basics","sourceLanguage":"zh-CN","targetLanguage":"en-US"},
-  {"id":"zh-en-wo","text":"我","reading":"wǒ","translation":"I; me","level":1,"topic":"People","sourceLanguage":"zh-CN","targetLanguage":"en-US"},
-  {"id":"zh-en-ren","text":"人","reading":"rén","translation":"person","level":1,"topic":"People","sourceLanguage":"zh-CN","targetLanguage":"en-US"},
-  {"id":"zh-en-shui","text":"水","reading":"shuǐ","translation":"water","level":1,"topic":"Food","sourceLanguage":"zh-CN","targetLanguage":"en-US"},
-  {"id":"zh-en-xuexi","text":"学习","reading":"xuéxí","translation":"to study","level":1,"topic":"Education","sourceLanguage":"zh-CN","targetLanguage":"en-US"}
-]
