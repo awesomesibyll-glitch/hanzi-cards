@@ -4,6 +4,36 @@ Offline-first iOS/Android app for Chinese → English vocabulary. English interf
 SQLite progress, four-grade spaced repetition, system speech, and native SVG
 handwriting practice with stroke-order animation.
 
+## Install on iPhone from Safari
+
+Open **https://hanzi-cards-iphone.tpodpesok.chatgpt.site** in Safari using your
+ChatGPT account if prompted. Tap **Share → Add to Home Screen → Add**.
+Keep **Open as Web App** enabled if Safari shows that option. Open the new icon
+and wait for **Ready offline** before disconnecting.
+
+The web version includes cards, SM-2 scheduling, stroke practice, animation,
+Chinese/English speech, adding custom words, JSON backup export and restore.
+Progress is saved in IndexedDB on this device. It is separate from the native
+app and may also differ between Safari and the installed Home Screen app.
+Export and restore a backup to transfer it. Clearing website data can delete it.
+Offline speech depends on downloaded system voices; tap Play to enable speech.
+
+Source: `web/`. Built static app: `docs/`. The `docs/` directory can also be
+published with GitHub Pages using **main /docs** as the source. No framework,
+CDN scripts or remote fonts are needed for this web app.
+
+```sh
+node scripts/build-web.mjs
+node --test tests/web.test.mjs
+node scripts/serve-web.mjs
+```
+
+The local preview is at http://127.0.0.1:8766. `build-web.mjs` generates browser
+modules from the same scheduling and stroke-validation functions as the native
+app, and a content-versioned service worker that caches all required assets.
+The Check iPhone web app workflow validates the backup format, offline routing,
+precache coverage, install metadata and generated-file consistency.
+
 ## Run locally
 
 Install Node.js 24 LTS with npm, then:

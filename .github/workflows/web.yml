@@ -1,0 +1,19 @@
+name: Check iPhone web app
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  pwa:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node scripts/build-web.mjs
+      - run: node --check docs/app.mjs
+      - run: node --test tests/web.test.mjs
+      - run: git diff --exit-code -- docs
