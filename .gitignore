@@ -1,0 +1,13 @@
+node_modules/
+.expo/
+dist/
+*.db
+*.db-shm
+*.db-wal
+.env*
+!.env.example
+android/
+ios/
+*.jks
+*.p12
+*.mobileprovision

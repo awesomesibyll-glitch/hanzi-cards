@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "Hanzi Cards",
+    "slug": "hanzi-cards",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.awesomesibyll.hanzicards"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#177a5c"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "com.awesomesibyll.hanzicards"
+    },
+    "plugins": [
+      "expo-sqlite"
+    ]
+  }
+}
