@@ -6,8 +6,8 @@ handwriting practice with stroke-order animation.
 
 ## Install on iPhone from Safari
 
-Open **https://hanzi-cards-iphone.tpodpesok.chatgpt.site** in Safari using your
-ChatGPT account if prompted. Tap **Share → Add to Home Screen → Add**.
+After enabling GitHub Pages, open **https://awesomesibyll-glitch.github.io/hanzi-cards/**
+in Safari. Tap **Share → Add to Home Screen → Add**.
 Keep **Open as Web App** enabled if Safari shows that option. Open the new icon
 and wait for **Ready offline** before disconnecting.
 
@@ -19,7 +19,9 @@ Export and restore a backup to transfer it. Clearing website data can delete it.
 Offline speech depends on downloaded system voices; tap Play to enable speech.
 
 Source: `web/`. Built static app: `docs/`. The `docs/` directory can also be
-published with GitHub Pages using **main /docs** as the source. No framework,
+published with GitHub Pages using **main /docs** as the source. In repository
+Settings → Pages, choose **Deploy from a branch**, **main**, **/docs**, then Save.
+No framework,
 CDN scripts or remote fonts are needed for this web app.
 
 ```sh
