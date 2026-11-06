@@ -12,13 +12,18 @@ Russian words** (community CEFR A1–C2). Choose a course and level above the ca
 English translations and levels are AI-generated and not human-verified; they
 may contain errors. The existing six card IDs and review progress are preserved.
 
-**Audio settings** offers individual Chinese/English/Russian system voices and
-speed. Enhanced/Premium/Natural voices are preferred when the browser exposes
-them. English can use attributed human recordings via Free Dictionary API;
-recordings cache after download and fall back to system speech when unavailable.
-The first online lookup sends the English word to dictionaryapi.dev. Choose
-System voices only to disable recording lookups. Native iOS voice installation
-and Safari's exposed voice list remain controlled by iOS, not this website.
+**Audio** offers individual Chinese/English/Russian system voices and speed.
+Word and sentence playback use the Web Speech API. Enhanced and Premium
+on-device voices are preferred when the browser exposes them. Install the
+corresponding system language voice to listen offline.
+
+**Study settings** switches between classic cards and typing the answer. In
+active recall, Chinese answers accept Hanzi or pinyin. The daily new-word cap
+is shared across courses, with 10 by default and 20 or 50 as options. Previously
+scheduled reviews remain available after reaching the cap. Custom words require
+a sentence and translation. Built-in words have curated examples where available
+and bilingual practice sentences elsewhere. The Chinese add-word form includes
+an offline pinyin picker for common expressions.
 
 Expanded words and all 2,970 Chinese stroke guides are bundled in compressed
 files (~1.5 MB total). This requires a browser with DecompressionStream support
@@ -33,9 +38,11 @@ and wait for **Ready offline** before disconnecting.
 
 The web version includes cards, SM-2 scheduling, stroke practice, animation,
 Chinese/English speech, adding custom words, JSON backup export and restore.
-Progress is saved in IndexedDB on this device. It is separate from the native
-app and may also differ between Safari and the installed Home Screen app.
-Export and restore a backup to transfer it. Clearing website data can delete it.
+Custom words, study settings and review history are saved in localStorage.
+Existing IndexedDB progress in the same browser profile is migrated on first
+launch. Browser storage is separate from the native app and may also differ
+between Safari and the installed Home Screen app. Export and restore a backup
+or use optional GitHub Sync to transfer progress.
 Offline speech depends on downloaded system voices; tap Play to enable speech.
 
 ## Install on Windows and sync across devices

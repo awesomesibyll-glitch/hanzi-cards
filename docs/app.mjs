@@ -1,9 +1,11 @@
-import { schedule } from './modules/srs.mjs';
 import { matchesStroke } from './modules/strokes.mjs';
-import { openLibrary, snapshot, saveReview, addWord, restoreBackup, validateBackup, mergeSync, syncPayload, RATINGS } from './storage.mjs';
-import { playAudio, stopAudio, warmAudio, audioPreference, availableVoices } from './audio.mjs';
+import { openLibrary, snapshot, saveReview, addWord, restoreBackup, validateBackup, mergeSync, syncPayload, STORAGE_KEY } from './storage.mjs';
+import { playAudio, stopAudio, audioPreference, availableVoices } from './audio.mjs';
+import { checkAnswer, pinyinChoices, studyQueue, studySchedule } from './study.mjs';
 import { syncGitHub } from './sync.mjs';
 const $=id=>document.getElementById(id);
+for(const gesture of ['gesturestart','gesturechange'])document.addEventListener(gesture,event=>event.preventDefault(),{passive:false});
+document.addEventListener('touchmove',event=>{if(event.touches.length>1&&event.cancelable)event.preventDefault();},{passive:false});
 const svgNS='http://www.w3.org/2000/svg';
 let library,card,strokeBank={},busy=false,revealed=false,currentCharacter='',strokeIndex=0,entry,points=[],pointer=null,animation=null,offlineReady=false;
 let operation=0;
@@ -11,19 +13,15 @@ let offlineFiles=[];
 const notify=message=>{$('notice').textContent=message;$('notice').hidden=!message;};
 const safePreference=(name,value)=>{try{if(value===undefined)return localStorage.getItem(name);localStorage.setItem(name,value);}catch{return null;}};
 const formatDue=due=>new Date(due).toLocaleString(undefined,{dateStyle:'medium',timeStyle:'short'});
-function audioCredit(clip){
-  const box=$('audio-credit');box.replaceChildren();box.hidden=!clip;
-  if(!clip)return;
-  const source=document.createElement('a');source.href=clip.source;source.target='_blank';source.rel='noopener';source.textContent='Recording credits & author';
-  const license=document.createElement('a');license.href=clip.license;license.target='_blank';license.rel='noopener';license.textContent=clip.licenseName;
-  box.append(source,document.createTextNode(' · '),license);
-}
-function speak(text,language){void playAudio(text,language,notify,audioCredit);}
+const speak=(text,language)=>playAudio(text,language,notify);
+const recallMode=()=>safePreference('hanzi-study-mode')==='recall';
+const dailyLimit=()=>[10,20,50].includes(Number(safePreference('hanzi-daily-limit'))) ? Number(safePreference('hanzi-daily-limit')) : 10;
+const grades={Again:'Poor',Hard:'Fair',Good:'Good'};
 const DECKS={zh:{source:'zh-CN',target:'en-US',name:'Chinese → English',labels:['HSK 1','HSK 2','HSK 3','HSK 4','HSK 5','HSK 6','HSK 7–9']},en:{source:'en-US',target:'ru-RU',name:'English → Russian',labels:['A1 · Beginner','A2 · Elementary','B1 · Intermediate','B2 · Upper intermediate','C1 · Advanced','C2 · Proficiency']}};
 let deck=safePreference('hanzi-deck')==='en'?'en':'zh';
 const deckWords=()=>library.words.filter(w=>w.sourceLanguage===DECKS[deck].source&&w.targetLanguage===DECKS[deck].target);
 function switchDeck(next){
-  if(busy)return;deck=next;safePreference('hanzi-deck',deck);stopAudio();options();showNext();
+  if(busy||!library)return;deck=next;safePreference('hanzi-deck',deck);stopAudio();options();showNext();
 }
 function options(){
   const config=DECKS[deck],words=deckWords();
@@ -44,37 +42,47 @@ function options(){
   document.querySelector('[name="level"]').replaceChildren(...config.labels.map((v,i)=>new Option(v,String(i+1))));
   document.querySelector('[name="text"]').placeholder=deck==='zh'?'你好':'hello';
   document.querySelector('[name="translation"]').placeholder=deck==='zh'?'hello':'привет';
+  renderPinyin();
 }
 function filteredCards(){
   const progress=new Map(library.progress.map(p=>[p.wordId,p]));
   return deckWords().filter(w=>(!Number($('level').value)||w.level===Number($('level').value))&&(!$('topic').value||w.topic===$('topic').value)).map(w=>({...w,...progress.get(w.id)}));
 }
-function renderStats(){
-  const now=Date.now(),midnight=new Date();midnight.setHours(0,0,0,0);
-  $('due-count').textContent=filteredCards().filter(c=>c.due<=now).length;
+function renderStats(remaining=studyQueue(filteredCards(),library.reviews,dailyLimit()).queue.length){
+  const midnight=new Date();midnight.setHours(0,0,0,0);
+  $('due-count').textContent=remaining;
   const ids=new Set(deckWords().map(w=>w.id));$('today-count').textContent=library.reviews.filter(r=>ids.has(r.wordId)&&r.reviewedAt>=midnight.getTime()).length;
   $('library-count').textContent=deckWords().length;
 }
 function showNext(){
-  stopAnimation();clearInk();stopAudio();audioCredit(null);
-  const cards=filteredCards(),now=Date.now();
-  card=cards.filter(c=>c.due<=now).sort((a,b)=>Number(a.due===0)-Number(b.due===0)||a.due-b.due||(a.rank??999999)-(b.rank??999999)||a.id.localeCompare(b.id))[0];
-  revealed=false;renderStats();
-  $('card').hidden=!card;$('empty').hidden=!!card;$('writing').hidden=!card||deck!=='zh';$('dataset-notice').hidden=!card?.generated;
+  stopAnimation();clearInk();stopAudio();
+  const cards=filteredCards(),now=Date.now(),active=recallMode();
+  const {queue,limited}=studyQueue(cards,library.reviews,dailyLimit(),now);
+  card=queue[0];
+  revealed=false;renderStats(queue.length);
+  $('card').hidden=!card;$('empty').hidden=!!card;$('writing').hidden=!card||deck!=='zh'||active;$('dataset-notice').hidden=!card?.generated;
   if(!card){
     const next=cards.filter(c=>c.due>now).sort((a,b)=>a.due-b.due)[0];
-    $('next-due').textContent=next?`Your next review is ${formatDue(next.due)}.`:'No words match these filters. Choose another selection or add a word.';
+    $('next-due').textContent=limited?'You reached today’s new-word limit. More new words will unlock tomorrow.':next?`Your next review is ${formatDue(next.due)}.`:'No words match these filters. Choose another selection or add a word.';
     return;
   }
-  $('word').textContent=card.text;$('reading').textContent=card.reading;$('translation').textContent=card.translation;
+  $('word').textContent=active?card.translation:card.text;$('reading').textContent=card.reading;$('translation').textContent=card.translation;
   $('word').style.fontSize=deck==='en'?(card.text.length>14?'32px':'46px'):(Array.from(card.text).length>4?'46px':'');$('word').lang=card.sourceLanguage;$('translation').lang=card.targetLanguage;$('reading').lang=deck==='zh'?'zh-Latn':'en';$('play-zh').setAttribute('aria-label',`Play ${deck==='zh'?'Chinese':'English'} pronunciation`);$('play-en').textContent=`Listen in ${deck==='zh'?'English':'Russian'} ↗`;
+  $('word').classList.toggle('recall-prompt',active);
+  $('word').lang=active?card.targetLanguage:card.sourceLanguage;
+  $('play-zh').hidden=active;
+  $('sentence').textContent=card.sentence;$('sentence').lang=card.sourceLanguage;
+  $('sentence-translation').textContent=card.sentenceTranslation;$('sentence-translation').lang=card.targetLanguage;
+  $('context-label').textContent=card.contextKind==='practice'?'PRACTICE SENTENCE':'IN CONTEXT';
   $('card-category').textContent=`${DECKS[deck].labels[card.level-1]??card.level} · ${card.topic}`;
   $('card-status').textContent=card.due===0?'NEW WORD':'REVIEW';
-  $('answer').hidden=true;$('ratings').hidden=true;$('reveal').hidden=false;$('card-prompt').hidden=false;
+  $('answer').hidden=true;$('ratings').hidden=true;$('reveal').hidden=active;$('card-prompt').hidden=false;
+  $('card-prompt').textContent=active?(deck==='zh'?'Type the Hanzi or pinyin for this meaning.':'Type the English word for this meaning.'):'Take a moment. What does this word mean?';
+  $('recall-form').hidden=!active;$('recall-form').reset();$('recall-feedback').hidden=true;
   const holder=document.querySelector('.rating-grid');holder.replaceChildren();
-  for(const rating of RATINGS){
-    const button=document.createElement('button');const next=schedule(card,rating);
-    button.append(document.createTextNode(rating));const hint=document.createElement('small');hint.textContent=rating==='Again'?'1 minute':`${next.interval} day${next.interval===1?'':'s'}`;button.append(hint);
+  for(const [rating,label] of Object.entries(grades)){
+    const button=document.createElement('button');const next=studySchedule(card,rating,now);
+    button.append(document.createTextNode(label));const hint=document.createElement('small');hint.textContent=rating==='Again'?'1 minute':`${next.interval} day${next.interval===1?'':'s'}`;button.append(hint);
     button.onclick=()=>rate(rating);holder.append(button);
   }
   $('characters').replaceChildren();
@@ -82,18 +90,23 @@ function showNext(){
     const b=document.createElement('button');b.textContent=character;b.lang='zh-CN';b.onclick=()=>selectCharacter(character);$('characters').append(b);
   }
   if(deck==='zh')selectCharacter($('characters').firstChild?.textContent??'');
-  warmAudio(card.text,card.sourceLanguage);warmAudio(card.translation,card.targetLanguage);
-  if($('auto-audio').checked)speak(card.text,card.sourceLanguage);
+  if(!active&&$('auto-audio').checked)speak(card.text,card.sourceLanguage);
 }
 async function reload(){library=await snapshot();renderStats();}
 async function rate(rating){
   if(busy||!card||!revealed)return;
   busy=true;const target=card;document.querySelectorAll('.rating-grid button').forEach(b=>b.disabled=true);
-  try{await saveReview(target,rating);await reload();notify('');showNext();}
+  try{await saveReview(target,rating,Date.now(),dailyLimit());await reload();notify('');showNext();}
   catch(e){notify(e.message);await reload();showNext();}
   finally{busy=false;document.querySelectorAll('.rating-grid button').forEach(b=>b.disabled=false);}
 }
-function reveal(){if(!card||revealed||busy)return;revealed=true;$('answer').hidden=false;$('ratings').hidden=false;$('reveal').hidden=true;$('card-prompt').hidden=true;}
+function reveal(checked=false){
+  if(!card||revealed||busy||(recallMode()&&checked!==true))return;
+  revealed=true;$('answer').hidden=false;$('ratings').hidden=false;$('reveal').hidden=true;$('card-prompt').hidden=true;
+  $('recall-form').hidden=true;$('play-zh').hidden=false;
+  $('word').textContent=card.text;$('word').lang=card.sourceLanguage;$('word').classList.remove('recall-prompt');
+  $('writing').hidden=deck!=='zh';
+}
 function stopAnimation(){if(animation)clearInterval(animation);animation=null;$('animate').disabled=false;}
 function clearInk(){points=[];pointer=null;$('ink').setAttribute('points','');}
 function drawOutlines(){
@@ -136,15 +149,61 @@ $('clear').onclick=()=>selectCharacter(currentCharacter);
 $('level').onchange=$('topic').onchange=()=>{if(!busy){safePreference('hanzi-level-'+deck,$('level').value);safePreference('hanzi-topic-'+deck,$('topic').value);showNext();}};
 $('deck-zh').onclick=()=>switchDeck('zh');$('deck-en').onclick=()=>switchDeck('en');
 $('reveal').onclick=reveal;$('play-zh').onclick=()=>card&&speak(card.text,card.sourceLanguage);$('play-en').onclick=()=>card&&speak(card.translation,card.targetLanguage);
+$('play-sentence').onclick=()=>card&&speak(card.sentence,card.sourceLanguage);
+$('recall-form').onsubmit=event=>{
+  event.preventDefault();
+  const input=$('recall-input').value.trim();
+  if (!card||busy||revealed||!input) return;
+  const correct=checkAnswer(card,input);
+  const feedback=$('recall-feedback');
+  feedback.dataset.correct=String(correct);
+  feedback.textContent=correct?'Correct!':`Your answer: ${input}. Compare it with the card below.`;
+  feedback.hidden=false;
+  reveal(true);
+};
+$('study-settings').onclick=()=>{
+  $('study-mode').value=recallMode()?'recall':'classic';
+  $('daily-limit').value=String(dailyLimit());
+  $('study-dialog').showModal();
+};
+$('close-study').onclick=()=>$('study-dialog').close();
+$('study-form').onsubmit=event=>{
+  event.preventDefault();
+  if(busy)return;
+  try {
+    localStorage.setItem('hanzi-study-mode',$('study-mode').value);
+    localStorage.setItem('hanzi-daily-limit',$('daily-limit').value);
+    $('study-dialog').close();
+    if(library)showNext();
+  } catch { notify('The browser could not save your study settings.'); }
+};
 $('refresh').onclick=()=>reload().then(showNext).catch(e=>notify(e.message));
 $('auto-audio').checked=safePreference('hanzi-auto-audio')==='true';
 $('auto-audio').onchange=()=>{safePreference('hanzi-auto-audio',String($('auto-audio').checked));if($('auto-audio').checked&&card)speak(card.text,card.sourceLanguage);};
 $('help').onclick=()=>{$('installed-status').textContent=(matchMedia('(display-mode: standalone)').matches||navigator.standalone)?'You are already using the installed web app.':'';$('help-dialog').showModal();};
-$('add-word').onclick=()=>$('add-dialog').showModal();$('close-add').onclick=()=>$('add-dialog').close();
+const wordForm=$('word-form');
+function renderPinyin(){
+  const reading=wordForm.elements.namedItem('reading');
+  const matches=deck==='zh'?pinyinChoices(reading.value):[];
+  $('pinyin-panel').hidden=deck!=='zh';
+  $('pinyin-choices').replaceChildren(...matches.map(([hanzi,pinyin])=>{
+    const button=document.createElement('button');
+    button.type='button';button.className='secondary';button.textContent=hanzi;button.lang='zh-CN';button.title=pinyin;
+    button.onclick=()=>{
+      wordForm.elements.namedItem('text').value=hanzi;
+      reading.value=pinyin;
+      wordForm.elements.namedItem('translation').focus();
+      renderPinyin();
+    };
+    return button;
+  }));
+}
+wordForm.elements.namedItem('reading').oninput=renderPinyin;
+$('add-word').onclick=()=>{renderPinyin();$('add-dialog').showModal();};$('close-add').onclick=()=>$('add-dialog').close();
 $('word-form').onsubmit=async e=>{
   e.preventDefault();if(busy)return;busy=true;
   const form=new FormData(e.currentTarget);
-  try{await addWord({id:`custom-${crypto.randomUUID()}`,text:form.get('text').trim(),reading:form.get('reading').trim()||'IPA unavailable',translation:form.get('translation').trim(),level:Number(form.get('level')),topic:form.get('topic').trim(),sourceLanguage:DECKS[deck].source,targetLanguage:DECKS[deck].target});await reload();const level=$('level').value;options();$('level').value=level;$('add-dialog').close();$('word-form').reset();notify('Word added to your library. Choose All levels and All topics if it is outside your current filters.');if(!card)showNext();}
+  try{await addWord({id:`custom-${crypto.randomUUID()}`,text:form.get('text').trim(),reading:form.get('reading').trim()||'IPA unavailable',translation:form.get('translation').trim(),sentence:form.get('sentence').trim(),sentenceTranslation:form.get('sentenceTranslation').trim(),level:Number(form.get('level')),topic:form.get('topic').trim(),sourceLanguage:DECKS[deck].source,targetLanguage:DECKS[deck].target});await reload();const level=$('level').value;options();$('level').value=level;$('add-dialog').close();$('word-form').reset();notify('Word added to your library. Choose All levels and All topics if it is outside your current filters.');if(!card)showNext();}
   catch(e){notify(`Word was not saved: ${e.message}`);}finally{busy=false;}
 };
 $('backup').onclick=async()=>{
@@ -152,12 +211,13 @@ $('backup').onclick=async()=>{
 };
 $('restore').onchange=async e=>{
   const file=e.target.files?.[0];if(!file)return;
+  if(busy||!library){notify('Wait for the library or the current save to finish.');e.target.value='';return;}
+  busy=true;
   try{
-    if(busy)throw new Error('Wait for the current save to finish.');
     if(file.size>20*1024*1024)throw new Error('The backup is too large (20 MB maximum).');
     const data=validateBackup(JSON.parse(await file.text()));
     if(!confirm(`Replace the library and progress on this device with ${data.words.length} words from this backup? Export your current backup first if needed.`))return;
-    busy=true;await restoreBackup(data);await reload();options();showNext();notify('Backup restored.');
+    await restoreBackup(data);await reload();options();showNext();notify('Backup restored.');
   }catch(e){notify(`Backup was not restored: ${e.message}`);}finally{busy=false;e.target.value='';}
 };
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&!document.querySelector('dialog[open]')&&!['INPUT','SELECT','BUTTON'].includes(document.activeElement.tagName)){e.preventDefault();reveal();}});
@@ -230,6 +290,9 @@ $('sync-form').onsubmit = async event => {
   }
 };
 window.addEventListener('library-error',e=>notify(e.detail));
+window.addEventListener('storage',event=>{
+  if(library&&!busy&&[STORAGE_KEY,'hanzi-study-mode','hanzi-daily-limit'].includes(event.key))void reload().then(()=>{options();showNext();}).catch(error=>notify(error.message));
+});
 document.addEventListener('visibilitychange',()=>{if(document.hidden){stopAnimation();stopAudio();}else if(library&&!busy)reload().then(()=>{if(!card)showNext();}).catch(e=>notify(e.message));});
 setInterval(()=>{if(library&&!busy&&!document.hidden){renderStats();if(!card)showNext();}},15000);
 
@@ -240,15 +303,13 @@ function voiceSettings(){
     select.value=saved;if(!select.value)select.value='';
     select.onchange=()=>audioPreference('voice-'+language,select.value);
   }
-  $('audio-mode').value=audioPreference('audio-mode')||'recorded';
   $('speech-rate').value=audioPreference('speech-rate')||'0.95';
   $('rate-value').textContent=$('speech-rate').value+'×';
 }
-$('audio-settings').onclick=()=>{voiceSettings();$('audio-dialog').showModal();};
+$('audio-settings').onclick=()=>{voiceSettings();$('audio-preview-status').textContent='';$('test-voice').disabled=!card||(recallMode()&&!revealed);$('audio-dialog').showModal();};
 $('close-audio').onclick=()=>$('audio-dialog').close();
-$('audio-mode').onchange=()=>audioPreference('audio-mode',$('audio-mode').value);
 $('speech-rate').oninput=()=>{audioPreference('speech-rate',$('speech-rate').value);$('rate-value').textContent=$('speech-rate').value+'×';};
-$('test-voice').onclick=()=>{if(card)speak(card.text,card.sourceLanguage);};
+$('test-voice').onclick=()=>{if(card&&(!recallMode()||revealed))playAudio(card.text,card.sourceLanguage,message=>{$('audio-preview-status').textContent=message;});};
 window.speechSynthesis?.addEventListener('voiceschanged',()=>{if($('audio-dialog').open)voiceSettings();});
 
 async function offlineSetup(){

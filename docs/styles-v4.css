@@ -6,3 +6,39 @@
 #sync-form a{color:var(--green)}
 #sync-status:empty{display:none}
 @media(max-width:420px){#open-sync{margin-right:4px;font-size:10px}header .brand{gap:7px}}
+:root {
+  --surface: #fff;
+  --practice-bg: #edf6f0;
+  --success: #135f44;
+  --error: #963d35;
+}
+html, body { overscroll-behavior: none; touch-action: pan-y; }
+button, a, input, textarea, select { touch-action: manipulation; }
+.header-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.header-actions #audio-settings, .header-actions #open-sync { margin: 0; }
+header .brand-icon { flex-shrink: 0; background: none; }
+.header-actions button { min-height: 44px; }
+.header-actions .icon-button { min-height: 34px; }
+#word.recall-prompt { font: 500 clamp(22px,5vw,38px)/1.25 Georgia,serif !important; letter-spacing: 0; margin: 26px 0 10px; }
+#recall-form { max-width: 440px; margin: 16px auto; text-align: left; }
+#recall-form button { margin-top: 12px; }
+#recall-feedback { padding: 12px; border-radius: 10px; overflow-wrap: anywhere; }
+#recall-feedback[data-correct="true"] { background: var(--practice-bg); color: var(--success); }
+#recall-feedback[data-correct="false"] { background: #fff0ed; color: var(--error); }
+.context-box { margin: 18px auto; padding: 12px 16px; max-width: 510px; background: var(--practice-bg); border-radius: 13px; text-align: left; overflow-wrap: anywhere; }
+.context-heading { display: flex; align-items: center; justify-content: space-between; }
+.context-box p { margin: 7px 0; line-height: 1.5; }
+.context-box p:last-child { color: var(--muted); font-size: 14px; }
+#study .rating-grid { grid-template-columns: repeat(3,1fr); }
+#study .rating-grid button { min-height: 52px; }
+#pinyin-choices { display: flex; flex-wrap: wrap; gap: 6px; }
+#pinyin-choices button { min-width: 44px; min-height: 44px; font-size: 17px; }
+#pinyin-help { margin: 0 0 6px; }
+#study-form { display: grid; gap: 12px; }
+body input:not([type="checkbox"]), body textarea, body select, body .toolbar select { font-size: 16px; }
+textarea { width: 100%; border: 1px solid var(--line); border-radius: 8px; padding: 11px 12px; color: inherit; background: var(--surface); resize: vertical; font-family: inherit; }
+@media (max-width: 540px) {
+  body header { align-items: flex-start; flex-direction: column; gap: 8px; }
+  .header-actions { width: 100%; justify-content: space-between; gap: 4px; }
+  .header-actions .text-button { font-size: 12px; }
+}

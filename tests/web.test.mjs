@@ -5,8 +5,9 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import { gunzipSync } from 'node:zlib';
-import { validateBackup, mergeSyncRecords, syncPayload } from '../docs/storage.mjs';
+import { validateBackup, mergeSyncRecords, syncPayload, openLibrary, snapshot, saveReview, addWord } from '../docs/storage.mjs';
 import { syncGitHub } from '../docs/sync.mjs';
+import { withContext, pinyinChoices, checkAnswer, studyQueue, studySchedule } from '../docs/study.mjs';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const catalog=JSON.parse(readFileSync(resolve(root,'docs/data/catalog.json'),'utf8'));
 const words=JSON.parse(gunzipSync(Buffer.concat(catalog.packs.words.map(file=>readFileSync(resolve(root,'docs/data',file))))).toString('utf8'));
@@ -33,7 +34,7 @@ test('service worker precaches every required file and serves cached assets offl
 });
 test('manifest uses project-relative URLs and includes iPhone installation metadata',()=>{
   const manifest=JSON.parse(readFileSync(resolve(root,'docs/manifest.webmanifest'),'utf8'));
-  assert.equal(manifest.start_url,'./devices.html');assert.equal(manifest.id,'./');assert.equal(manifest.scope,'./');assert.equal(manifest.display,'standalone');
+  assert.equal(manifest.start_url,'./practice.html');assert.equal(manifest.id,'./');assert.equal(manifest.scope,'./');assert.equal(manifest.display,'standalone');
   for(const icon of manifest.icons)assert.ok(existsSync(resolve(root,'docs',icon.src)));
   const html=readFileSync(resolve(root,'docs/index.html'),'utf8');assert.ok(html.includes('apple-touch-icon'));assert.ok(html.includes('viewport-fit=cover'));
 });
@@ -61,7 +62,7 @@ test('GitHub sync encrypts and merges reviews and custom cards from two devices'
     return Response.json(gist);
   });
   const seed = words[0];
-  const custom = {...seed, id:'custom-test', text:'test custom word'};
+  const custom = withContext({...seed, id:'custom-test', text:'test custom word'});
   function device(words, reviews) {
     return {
       device:crypto.randomUUID(),
@@ -89,4 +90,50 @@ test('GitHub sync encrypts and merges reviews and custom cards from two devices'
   assert.deepEqual(first.reviews.map(r=>r.rating).sort(), ['Easy','Good']);
   assert.deepEqual(second.reviews.map(r=>r.rating).sort(), ['Easy','Good']);
   assert.deepEqual((await first.merge([await second.local()])).reviews, []);
+});
+
+test('offline pinyin suggestions, active recall, and bilingual contexts',()=>{
+  assert.deepEqual(pinyinChoices('ni3 hao3').slice(0,2).map(row=>row[0]),['你好','泥壕']);
+  const hello=withContext(words.find(word=>word.text==='你'));
+  assert.ok(checkAnswer(hello,'ni3'));
+  assert.ok(checkAnswer(hello,'你'));
+  assert.ok(!checkAnswer(hello,'zaijian'));
+  assert.ok(words.every(word=>{const entry=withContext(word);return entry.sentence&&entry.sentenceTranslation;}));
+  const html=readFileSync(resolve(root,'docs/index.html'),'utf8');
+  assert.match(html,/initial-scale=1\.0, maximum-scale=1\.0, user-scalable=no/);
+});
+
+test('daily limit applies to first attempts only and the study state survives reopening',async t=>{
+  const data=new Map();
+  const request=result=>{const value={result};queueMicrotask(()=>value.onsuccess());return value;};
+  const oldCard=withContext({...words[0],id:'custom-legacy'});
+  const legacy={words:[oldCard],progress:[{wordId:oldCard.id,due:100,repetitions:0,interval:0,ease:2.5}],reviews:[]};
+  const globals={
+    navigator:{},
+    localStorage:{getItem:key=>data.get(key)??null,setItem:(key,value)=>data.set(key,value)},
+    indexedDB:{open:()=>request({close(){},transaction:()=>({objectStore:name=>({getAll:()=>request(legacy[name])})})})}
+  };
+  for(const [key,value] of Object.entries(globals)){
+    const descriptor=Object.getOwnPropertyDescriptor(globalThis,key);
+    Object.defineProperty(globalThis,key,{configurable:true,value});
+    t.after(()=>{if(descriptor)Object.defineProperty(globalThis,key,descriptor);else delete globalThis[key];});
+  }
+  const bank=words.slice(0,3);
+  await openLibrary(bank);
+  const now=new Date(2026,10,6,12).getTime();
+  const fresh=id=>({id,due:0,repetitions:0});
+  await saveReview(fresh(bank[0].id),'Again',now,1);
+  await assert.rejects(saveReview(fresh(bank[1].id),'Good',now,1),/limit/);
+  const state=await snapshot();
+  const cards=bank.map((word,i)=>({...word,...state.progress[i]}));
+  assert.equal(studyQueue(cards,state.reviews,1,now+60_000).queue[0].id,bank[0].id);
+  assert.equal(studyQueue(cards,state.reviews,1,now+86_400_000).queue.length,2);
+  assert.equal(studySchedule({repetitions:2,interval:4,ease:2.5},'Good',now).interval,8);
+  await addWord(withContext({...bank[0],id:'custom-persistence',text:'我学汉语'}));
+  await openLibrary(bank);
+  const reopened=await snapshot();
+  assert.equal(reopened.reviews.length,1);
+  assert.equal(reopened.progress[0].status,'learning');
+  assert.equal(reopened.progress.find(p=>p.wordId===oldCard.id).due,100);
+  assert.ok(reopened.words.some(word=>word.id==='custom-persistence'));
 });

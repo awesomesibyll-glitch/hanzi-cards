@@ -1,54 +1,70 @@
-import { schedule } from './modules/srs.mjs';
+import { studyQueue, studySchedule, withContext } from './study.mjs';
 export const RATINGS = ['Again', 'Hard', 'Good', 'Easy'];
+export const STORAGE_KEY = 'hanzi-study-v4';
+let catalog;
 const request = r => new Promise((resolve, reject) => { r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error); });
-const completed = tx => new Promise((resolve,reject)=>{tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error??new Error('Save cancelled'));});
-let db;
+const lock = task => globalThis.navigator?.locks ? navigator.locks.request(STORAGE_KEY,task) : task();
+const emptyState = () => ({words:[],progress:[],reviews:[]});
+const read = () => JSON.parse(localStorage.getItem(STORAGE_KEY));
+function write(state) {
+  try { localStorage.setItem(STORAGE_KEY,JSON.stringify(state)); }
+  catch { throw new Error('The browser could not save your changes. Free up website storage and try again.'); }
+}
+function update(change) {
+  return lock(() => {
+    const state = read();
+    change(state);
+    write(state);
+  });
+}
+async function legacyState() {
+  if (!globalThis.indexedDB) return emptyState();
+  const opening = indexedDB.open('hanzi-cards-pwa');
+  let missing = false;
+  opening.onupgradeneeded = () => { missing = true; opening.transaction.abort(); };
+  let db;
+  try { db = await request(opening); }
+  catch (error) { if (missing) return emptyState(); throw error; }
+  try {
+    const tx = db.transaction(['words','progress','reviews']);
+    const [words,progress,reviews] = await Promise.all(['words','progress','reviews'].map(name => request(tx.objectStore(name).getAll())));
+    return {words:words.filter(w=>!catalog.has(w.id)).map(withContext), progress:progress.filter(p=>p.due), reviews};
+  } finally { db.close(); }
+}
 export async function openLibrary(seed) {
-  const r=indexedDB.open('hanzi-cards-pwa',1);
-  r.onupgradeneeded=()=>{
-    const d=r.result;
-    d.createObjectStore('words',{keyPath:'id'});
-    d.createObjectStore('progress',{keyPath:'wordId'});
-    d.createObjectStore('reviews',{keyPath:'id',autoIncrement:true});
-  };
-  r.onblocked=()=>window.dispatchEvent(new CustomEvent('library-error',{detail:'Close other Hanzi Cards tabs, then reload.'}));
-  db=await request(r); db.onversionchange=()=>db.close();
-  const tx=db.transaction(['words','progress'],'readwrite');const done=completed(tx);
-  const existing=tx.objectStore('words').getAllKeys();
-  existing.onsuccess=()=>{
-    const ids=new Set(existing.result);
-    for(const word of seed){
-      tx.objectStore('words').put(word);
-      if(!ids.has(word.id))tx.objectStore('progress').put({wordId:word.id,repetitions:0,interval:0,ease:2.5,due:0});
-    }
-  };
-  await done;
+  catalog = new Map(seed.map(word => [word.id,withContext(word)]));
+  await lock(async () => {
+    if (!read()) write(await legacyState());
+  });
 }
 export async function snapshot() {
-  const tx=db.transaction(['words','progress','reviews']); const done=completed(tx);
-  const [words,progress,reviews]=await Promise.all(['words','progress','reviews'].map(n=>request(tx.objectStore(n).getAll())));
-  await done;return {version:1,exportedAt:new Date().toISOString(),words,progress,reviews,attribution:[{source:'Complete HSK Vocabulary / CC-CEDICT',url:'https://github.com/drkameleon/complete-hsk-vocabulary',license:'CC BY-SA 4.0 (adapted dictionary fields)'},{source:'Vocab Bloom Hub',url:'https://huggingface.co/datasets/Fristail27/vocab-bloom-hub-en',license:'CC BY 4.0',notice:'AI-generated, not human-verified; translations and CEFR levels may contain errors.'}]};
+  const state=read();
+  const words=[...catalog.values(),...state.words];
+  const saved=new Map(state.progress.map(p=>[p.wordId,p]));
+  const progress=words.map(w=>{
+    const item=saved.get(w.id)??freshProgress(w.id);
+    return {...item,status:!item.due?'new':item.repetitions?'review':'learning'};
+  });
+  return {version:1,exportedAt:new Date().toISOString(),words,progress,reviews:state.reviews,attribution:[{source:'Complete HSK Vocabulary / CC-CEDICT',url:'https://github.com/drkameleon/complete-hsk-vocabulary',license:'CC BY-SA 4.0 (adapted dictionary fields)'},{source:'Vocab Bloom Hub',url:'https://huggingface.co/datasets/Fristail27/vocab-bloom-hub-en',license:'CC BY 4.0',notice:'AI-generated, not human-verified; translations and CEFR levels may contain errors.'}]};
 }
-export async function saveReview(card,rating,now=Date.now()) {
+export async function saveReview(card,rating,now=Date.now(),limit=10) {
   if(!RATINGS.includes(rating))throw new Error('Unknown review rating');
-  const tx=db.transaction(['progress','reviews'],'readwrite');const done=completed(tx);
-  let conflict=false;
-  const r=tx.objectStore('progress').get(card.id);
-  r.onsuccess=()=>{
-    const current=r.result;
-    if(!current||current.due!==card.due||current.repetitions!==card.repetitions){conflict=true;tx.abort();return;}
-    const next=schedule(current,rating,now);
-    tx.objectStore('progress').put({...next,wordId:card.id});
-    tx.objectStore('reviews').add({wordId:card.id,rating,reviewedAt:now,nextDue:next.due});
-  };
-  try{await done;}catch(e){if(conflict)throw new Error('This card changed in another tab. Your queue has been refreshed.');throw e;}
+  await update(state=>{
+    const index=state.progress.findIndex(p=>p.wordId===card.id);
+    const current=state.progress[index]??freshProgress(card.id);
+    if ((!catalog.has(card.id)&&!state.words.some(w=>w.id===card.id))||current.due!==card.due||current.repetitions!==card.repetitions) {
+      throw new Error('This card changed in another tab. Your queue has been refreshed.');
+    }
+    if (!current.due && !studyQueue([card],state.reviews,limit,now).queue.length) throw new Error('You reached today’s new-word limit.');
+    const next={...studySchedule(current,rating,now),wordId:card.id};
+    if(index===-1)state.progress.push(next);else state.progress[index]=next;
+    state.reviews.push({wordId:card.id,rating,reviewedAt:now,nextDue:next.due,rule:2});
+  });
 }
 export async function addWord(word) {
   validateWords([word]);
-  const tx=db.transaction(['words','progress'],'readwrite');const done=completed(tx);
-  tx.objectStore('words').add(word);
-  tx.objectStore('progress').add({wordId:word.id,repetitions:0,interval:0,ease:2.5,due:0});
-  await done;
+  if (!word.sentence?.trim() || !word.sentenceTranslation?.trim()) throw new Error('Enter a sentence and its translation.');
+  await update(state=>{state.words.push(word);});
 }
 function validateWords(words) {
   if(!Array.isArray(words)||words.length>30000)throw new Error('Backup must contain at most 30,000 words.');
@@ -57,6 +73,9 @@ function validateWords(words) {
     if(!w||typeof w!=='object')throw new Error('Invalid word.');
     for(const key of ['id','text','reading','translation','sourceLanguage','targetLanguage','topic']){
       if(typeof w[key]!=='string'||!w[key].trim()||w[key].length>500)throw new Error(`Invalid word field: ${key}`);
+    }
+    for(const key of ['sentence','sentenceTranslation']){
+      if(w[key]!==undefined&&(typeof w[key]!=='string'||!w[key].trim()||w[key].length>700))throw new Error(`Invalid word field: ${key}`);
     }
     if(ids.has(w.id)||!Number.isInteger(w.level)||w.level<1||w.level>9)throw new Error('Duplicate word ID or invalid level.');
     ids.add(w.id);
@@ -77,12 +96,11 @@ export function validateBackup(data){
 }
 export async function restoreBackup(data) {
   validateBackup(data);
-  const tx=db.transaction(['words','progress','reviews'],'readwrite');const done=completed(tx);
-  for(const name of ['words','progress','reviews'])tx.objectStore(name).clear();
-  for(const w of data.words)tx.objectStore('words').put(w);
-  for(const p of data.progress)tx.objectStore('progress').put(p);
-  for(const r of data.reviews){const {id,...review}=r;tx.objectStore('reviews').add(review);}
-  await done;
+  await lock(()=>write({
+    words:data.words.filter(w=>!catalog.has(w.id)).map(withContext),
+    progress:data.progress.filter(p=>p.due),
+    reviews:data.reviews
+  }));
 }
 
 const freshProgress = wordId => ({wordId, repetitions:0, interval:0, ease:2.5, due:0});
@@ -93,7 +111,7 @@ export function syncPayload({words, reviews}) {
   return {
     version:1,
     words:words.filter(word => word.id.startsWith('custom-')),
-    reviews:reviews.map(({wordId, rating, reviewedAt}) => ({wordId, rating, reviewedAt}))
+    reviews:reviews.map(({wordId, rating, reviewedAt, rule}) => ({wordId, rating, reviewedAt, rule}))
   };
 }
 
@@ -111,7 +129,7 @@ export function mergeSyncRecords(words, reviews, backups) {
       if (!word.id.startsWith('custom-')) throw new Error('Invalid custom card in sync data.');
       if (wordIds.has(word.id)) continue;
       wordIds.add(word.id);
-      newWords.push(word);
+      newWords.push(withContext(word));
     }
   }
   for (const backup of backups) {
@@ -124,7 +142,7 @@ export function mergeSyncRecords(words, reviews, backups) {
       const key = reviewKey(review);
       if (reviewIds.has(key)) continue;
       reviewIds.add(key);
-      const clean = {wordId:review.wordId, rating:review.rating, reviewedAt:review.reviewedAt};
+      const clean = {wordId:review.wordId, rating:review.rating, reviewedAt:review.reviewedAt, rule:review.rule===2?2:1};
       newReviews.push(clean);
       addedReviews.add(clean);
       if (!byWord.has(clean.wordId)) byWord.set(clean.wordId, []);
@@ -136,7 +154,7 @@ export function mergeSyncRecords(words, reviews, backups) {
   for (const [wordId, history] of byWord) {
     let state = freshProgress(wordId);
     for (const review of history.sort(compareReviews)) {
-      state = schedule(state, review.rating, review.reviewedAt);
+      state = studySchedule(state, review.rating, review.reviewedAt, review.rule??1);
       if (addedReviews.has(review)) review.nextDue = state.due;
     }
     progress.set(wordId, {...state, wordId});
@@ -145,25 +163,12 @@ export function mergeSyncRecords(words, reviews, backups) {
 }
 
 export async function mergeSync(backups) {
-  const tx = db.transaction(['words','progress','reviews'], 'readwrite');
-  const done = completed(tx);
-  const words = tx.objectStore('words').getAll();
-  const reviews = tx.objectStore('reviews').getAll();
-  let mergeError;
-  reviews.onsuccess = () => {
-    try {
-      const changes = mergeSyncRecords(words.result, reviews.result, backups);
-      for (const word of changes.words) tx.objectStore('words').add(word);
-      for (const review of changes.reviews) tx.objectStore('reviews').add(review);
-      for (const progress of changes.progress) tx.objectStore('progress').put(progress);
-    } catch (error) {
-      mergeError = error;
-      tx.abort();
-    }
-  };
-  try {
-    await done;
-  } catch (error) {
-    throw mergeError ?? error;
-  }
+  await update(state=>{
+    const changes=mergeSyncRecords([...catalog.values(),...state.words],state.reviews,backups);
+    state.words.push(...changes.words);
+    state.reviews.push(...changes.reviews);
+    const progress=new Map(state.progress.map(p=>[p.wordId,p]));
+    for(const item of changes.progress)if(item.due)progress.set(item.wordId,item);
+    state.progress=[...progress.values()];
+  });
 }
