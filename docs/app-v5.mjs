@@ -1,7 +1,7 @@
 import { matchesStroke } from './modules/strokes.mjs';
-import { openLibrary, snapshot, saveReview, addWord, restoreBackup, validateBackup, mergeSync, syncPayload, STORAGE_KEY } from './storage-v4.mjs';
+import { openLibrary, snapshot, saveReview, addWord, restoreBackup, validateBackup, mergeSync, syncPayload, STORAGE_KEY } from './storage-v5.mjs';
 import { playAudio, stopAudio, audioPreference, availableVoices } from './audio-v4.mjs';
-import { checkAnswer, pinyinChoices, studyQueue, studySchedule } from './study.mjs';
+import { checkAnswer, clozeSentence, pinyinChoices, studyQueue, studySchedule } from './study-v5.mjs';
 import { syncGitHub } from './sync.mjs';
 const $=id=>document.getElementById(id);
 for(const gesture of ['gesturestart','gesturechange'])document.addEventListener(gesture,event=>event.preventDefault(),{passive:false});
@@ -14,7 +14,8 @@ const notify=message=>{$('notice').textContent=message;$('notice').hidden=!messa
 const safePreference=(name,value)=>{try{if(value===undefined)return localStorage.getItem(name);localStorage.setItem(name,value);}catch{return null;}};
 const formatDue=due=>new Date(due).toLocaleString(undefined,{dateStyle:'medium',timeStyle:'short'});
 const speak=(text,language)=>playAudio(text,language,notify);
-const recallMode=()=>safePreference('hanzi-study-mode')==='recall';
+const studyMode=()=>safePreference('hanzi-study-mode')||'classic';
+const recallMode=()=>['recall','cloze'].includes(studyMode());
 const dailyLimit=()=>[10,20,50].includes(Number(safePreference('hanzi-daily-limit'))) ? Number(safePreference('hanzi-daily-limit')) : 10;
 const grades={Again:'Poor',Hard:'Fair',Good:'Good'};
 const DECKS={zh:{source:'zh-CN',target:'en-US',name:'Chinese → English',labels:['HSK 1','HSK 2','HSK 3','HSK 4','HSK 5','HSK 6','HSK 7–9']},en:{source:'en-US',target:'ru-RU',name:'English → Russian',labels:['A1 · Beginner','A2 · Elementary','B1 · Intermediate','B2 · Upper intermediate','C1 · Advanced','C2 · Proficiency']}};
@@ -46,7 +47,8 @@ function options(){
 }
 function filteredCards(){
   const progress=new Map(library.progress.map(p=>[p.wordId,p]));
-  return deckWords().filter(w=>(!Number($('level').value)||w.level===Number($('level').value))&&(!$('topic').value||w.topic===$('topic').value)).map(w=>({...w,...progress.get(w.id)}));
+  const cloze=studyMode()==='cloze';
+  return deckWords().filter(w=>(!Number($('level').value)||w.level===Number($('level').value))&&(!$('topic').value||w.topic===$('topic').value)&&(!cloze||clozeSentence(w))).map(w=>({...w,...progress.get(w.id)}));
 }
 function renderStats(remaining=studyQueue(filteredCards(),library.reviews,dailyLimit()).queue.length){
   const midnight=new Date();midnight.setHours(0,0,0,0);
@@ -56,20 +58,20 @@ function renderStats(remaining=studyQueue(filteredCards(),library.reviews,dailyL
 }
 function showNext(){
   stopAnimation();clearInk();stopAudio();
-  const cards=filteredCards(),now=Date.now(),active=recallMode();
+  const cards=filteredCards(),now=Date.now(),active=recallMode(),cloze=studyMode()==='cloze';
   const {queue,limited}=studyQueue(cards,library.reviews,dailyLimit(),now);
   card=queue[0];
   revealed=false;renderStats(queue.length);
   $('card').hidden=!card;$('empty').hidden=!!card;$('writing').hidden=!card||deck!=='zh'||active;$('dataset-notice').hidden=!card?.generated;
   if(!card){
     const next=cards.filter(c=>c.due>now).sort((a,b)=>a.due-b.due)[0];
-    $('next-due').textContent=limited?'You reached today’s new-word limit. More new words will unlock tomorrow.':next?`Your next review is ${formatDue(next.due)}.`:'No words match these filters. Choose another selection or add a word.';
+    $('next-due').textContent=limited?'You reached today’s new-word limit. More new words will unlock tomorrow.':next?`Your next review is ${formatDue(next.due)}.`:cloze?'No gap-fill cards in this selection. Try All levels or switch modes in Study settings.':'No words match these filters. Choose another selection or add a word.';
     return;
   }
-  $('word').textContent=active?card.translation:card.text;$('reading').textContent=card.reading;$('translation').textContent=card.translation;
+  $('word').textContent=cloze?clozeSentence(card):active?card.translation:card.text;$('reading').textContent=card.reading;$('translation').textContent=card.translation;
   $('word').style.fontSize=deck==='en'?(card.text.length>14?'32px':'46px'):(Array.from(card.text).length>4?'46px':'');$('word').lang=card.sourceLanguage;$('translation').lang=card.targetLanguage;$('reading').lang=deck==='zh'?'zh-Latn':'en';$('play-zh').setAttribute('aria-label',`Play ${deck==='zh'?'Chinese':'English'} pronunciation`);$('play-en').textContent=`Listen in ${deck==='zh'?'English':'Russian'} ↗`;
   $('word').classList.toggle('recall-prompt',active);
-  $('word').lang=active?card.targetLanguage:card.sourceLanguage;
+  $('word').lang=active&&!cloze?card.targetLanguage:card.sourceLanguage;
   $('play-zh').hidden=active;
   $('sentence').textContent=card.sentence;$('sentence').lang=card.sourceLanguage;
   $('sentence-translation').textContent=card.sentenceTranslation;$('sentence-translation').lang=card.targetLanguage;
@@ -77,7 +79,7 @@ function showNext(){
   $('card-category').textContent=`${DECKS[deck].labels[card.level-1]??card.level} · ${card.topic}`;
   $('card-status').textContent=card.due===0?'NEW WORD':'REVIEW';
   $('answer').hidden=true;$('ratings').hidden=true;$('reveal').hidden=active;$('card-prompt').hidden=false;
-  $('card-prompt').textContent=active?(deck==='zh'?'Type the Hanzi or pinyin for this meaning.':'Type the English word for this meaning.'):'Take a moment. What does this word mean?';
+  $('card-prompt').textContent=cloze?(deck==='zh'?'Fill the gap with Hanzi or pinyin.':'Type the missing English word.'):active?(deck==='zh'?'Type the Hanzi or pinyin for this meaning.':'Type the English word for this meaning.'):'Take a moment. What does this word mean?';
   $('recall-form').hidden=!active;$('recall-form').reset();$('recall-feedback').hidden=true;
   const holder=document.querySelector('.rating-grid');holder.replaceChildren();
   for(const [rating,label] of Object.entries(grades)){
@@ -162,7 +164,7 @@ $('recall-form').onsubmit=event=>{
   reveal(true);
 };
 $('study-settings').onclick=()=>{
-  $('study-mode').value=recallMode()?'recall':'classic';
+  $('study-mode').value=studyMode();
   $('daily-limit').value=String(dailyLimit());
   $('study-dialog').showModal();
 };

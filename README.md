@@ -17,7 +17,9 @@ Word and sentence playback use the Web Speech API. Enhanced and Premium
 on-device voices are preferred when the browser exposes them. Install the
 corresponding system language voice to listen offline.
 
-**Study settings** switches between classic cards and typing the answer. In
+**Study settings** switches between classic cards, typing the answer and
+**Fill the gap**. Gap-fill cards use examples containing the exact target word
+and share the same review schedule as the other modes. In
 active recall, Chinese answers accept Hanzi or pinyin. The daily new-word cap
 is shared across courses, with 10 by default and 20 or 50 as options. Previously
 scheduled reviews remain available after reaching the cap. Custom words require

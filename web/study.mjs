@@ -1,4 +1,5 @@
 import { schedule, DAY } from './modules/srs.mjs';
+import { beginnerExamples } from './examples.mjs';
 
 // Common entries double as an offline input method and a set of natural examples.
 const chinese = [
@@ -48,7 +49,8 @@ export function pinyinChoices(text) {
 export function withContext(word) {
   if (word.sentence?.trim() && word.sentenceTranslation?.trim()) return word;
   const zh = word.sourceLanguage === 'zh-CN';
-  const example = zh ? examples.get(word.text) : Object.hasOwn(english,word.text) ? english[word.text] : undefined;
+  const example = (zh ? examples.get(word.text) : Object.hasOwn(english,word.text) ? english[word.text] : undefined) ??
+    beginnerExamples[zh?'zh':'en'].get(word.text);
   const [sentence, sentenceTranslation] = example ?? (zh
     ? [`我正在学习“${word.text}”这个词。`, `I’m learning the word “${word.text}”.`]
     : [`I’m learning the word “${word.text}”.`, `Я учу слово «${word.text}».`]);
@@ -60,6 +62,14 @@ export function checkAnswer(word, input) {
   const answer = normalize(input);
   if (!answer) return false;
   return answer === normalize(word.text) || (word.sourceLanguage === 'zh-CN' && pinyinKey(answer) === pinyinKey(word.reading));
+}
+
+export function clozeSentence(word) {
+  if (word.contextKind==='practice' || !word.sentence || !word.text) return '';
+  const literal=word.text.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  const pattern=word.sourceLanguage==='zh-CN' ? literal : `(?<![\\p{L}\\p{N}])${literal}(?![\\p{L}\\p{N}])`;
+  const prompt=word.sentence.replace(new RegExp(pattern,'giu'),'____');
+  return prompt===word.sentence ? '' : prompt;
 }
 
 export function studySchedule(progress, rating, now, rule = 2) {

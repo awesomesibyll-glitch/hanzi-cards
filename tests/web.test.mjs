@@ -7,7 +7,7 @@ import vm from 'node:vm';
 import { gunzipSync } from 'node:zlib';
 import { validateBackup, mergeSyncRecords, syncPayload, openLibrary, snapshot, saveReview, addWord } from '../docs/storage.mjs';
 import { syncGitHub } from '../docs/sync.mjs';
-import { withContext, pinyinChoices, checkAnswer, studyQueue, studySchedule } from '../docs/study.mjs';
+import { withContext, pinyinChoices, checkAnswer, clozeSentence, studyQueue, studySchedule } from '../docs/study.mjs';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const catalog=JSON.parse(readFileSync(resolve(root,'docs/data/catalog.json'),'utf8'));
 const words=JSON.parse(gunzipSync(Buffer.concat(catalog.packs.words.map(file=>readFileSync(resolve(root,'docs/data',file))))).toString('utf8'));
@@ -34,9 +34,22 @@ test('service worker precaches every required file and serves cached assets offl
 });
 test('manifest uses project-relative URLs and includes iPhone installation metadata',()=>{
   const manifest=JSON.parse(readFileSync(resolve(root,'docs/manifest.webmanifest'),'utf8'));
-  assert.equal(manifest.start_url,'./practice.html');assert.equal(manifest.id,'./');assert.equal(manifest.scope,'./');assert.equal(manifest.display,'standalone');
+  assert.equal(manifest.start_url,'./context.html');assert.equal(manifest.id,'./');assert.equal(manifest.scope,'./');assert.equal(manifest.display,'standalone');
   for(const icon of manifest.icons)assert.ok(existsSync(resolve(root,'docs',icon.src)));
   const html=readFileSync(resolve(root,'docs/index.html'),'utf8');assert.ok(html.includes('apple-touch-icon'));assert.ok(html.includes('viewport-fit=cover'));
+});
+
+test('gap-fill masks exact words, preserves sentence structure and excludes practice templates',()=>{
+  const zh=withContext(words.find(word=>word.text==='喜欢'&&word.sourceLanguage==='zh-CN'));
+  assert.equal(clozeSentence(zh),'我____喝茶。');
+  assert.ok(checkAnswer(zh,'xi3huan'));
+  assert.equal(clozeSentence({text:'an',sourceLanguage:'en-US',sentence:'An ant saw an apple.'}),'____ ant saw ____ apple.');
+  assert.equal(clozeSentence({text:'ant',sourceLanguage:'en-US',sentence:'I want a plant.'}),'');
+  assert.equal(clozeSentence({text:'cup',sourceLanguage:'en-US',sentence:'I’m learning the word “cup”.',contextKind:'practice'}),'');
+  for(const lang of ['zh-CN','en-US']){
+    const beginner=words.filter(word=>word.sourceLanguage===lang&&word.level<=2).map(withContext);
+    assert.ok(beginner.filter(word=>clozeSentence(word)).length>=20);
+  }
 });
 
 test('GitHub sync encrypts and merges reviews and custom cards from two devices', async t => {
