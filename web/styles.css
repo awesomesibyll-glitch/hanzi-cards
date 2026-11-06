@@ -164,3 +164,9 @@ noscript { display: block; padding: 25px; text-align: center; }
 #search-results li strong { display:block; color:var(--ink); font-size:16px; }
 #search-results li small { display:block; font-size:12px; color:var(--muted); }
 #search-results li button { flex-shrink:0; }
+.import-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+#import-status:empty, #import-preview:empty { display:none; }
+#import-preview { list-style:none; padding:0; margin:8px 0 0; }
+#import-preview li { padding:7px 9px; border-radius:8px; background:var(--sky); overflow-wrap:anywhere; }
+#import-preview li[data-status=error] { background:var(--peach); color:var(--error); }
+#import-preview li[data-status=duplicate] { background:#edf1f5; }

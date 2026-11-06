@@ -1,4 +1,5 @@
 import { studyQueue, studySchedule, withContext } from './study.mjs';
+import { importWordKey } from './import-list.mjs';
 export const RATINGS = ['Again', 'Hard', 'Good', 'Easy'];
 export const STORAGE_KEY = 'hanzi-study-v4';
 let catalog;
@@ -65,6 +66,27 @@ export async function addWord(word) {
   validateWords([word]);
   if (!word.sentence?.trim() || !word.sentenceTranslation?.trim()) throw new Error('Enter a sentence and its translation.');
   await update(state=>{state.words.push(word);});
+}
+export async function importWords(words,course,setId=''){
+  if(!Array.isArray(words)||!words.length||words.length>300)throw new Error('Choose between 1 and 300 valid rows.');
+  const cards=words.map(word=>withContext({...word,id:`custom-${crypto.randomUUID()}`}));
+  validateWords(cards);
+  let added=0;
+  await update(state=>{
+    const set=state.sets?.find(item=>item.id===setId);
+    if(setId&&set?.course!==course)throw new Error('This set is no longer available for the selected course.');
+    if(!cards.every(card=>inCourse(card,course)))throw new Error('The cards do not match the selected course.');
+    const keys=new Set([...catalog.values(),...state.words].map(importWordKey));
+    for(const card of cards){
+      const key=importWordKey(card);
+      if(keys.has(key))continue;
+      keys.add(key);
+      state.words.push(card);
+      if(set)set.wordIds.push(card.id);
+      added++;
+    }
+  });
+  return added;
 }
 const courseLanguages={zh:['zh-CN','en-US'],en:['en-US','ru-RU']};
 function inCourse(word,course){

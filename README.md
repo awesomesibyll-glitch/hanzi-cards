@@ -39,6 +39,13 @@ translation. Create a named set, add existing words and choose **Study this
 set** to practise just those words with their usual review schedules. Sets are
 stored on the device and included in exported backups.
 
+**Menu → Import word list** accepts up to 300 rows pasted from a spreadsheet.
+The standard order is word, translation, pinyin or IPA, example sentence,
+sentence translation, level and topic. A recognised header allows columns
+to be reordered. Chinese words require pinyin. Omitted levels default to
+HSK 1 or A1. Review the preview, then import into the library or a selected
+set. Existing words and invalid rows are skipped.
+
 Expanded words and all 2,970 Chinese stroke guides are bundled in compressed
 files (~1.5 MB total). This requires a browser with DecompressionStream support
 (modern Safari/iOS). See THIRD_PARTY_NOTICES.md for catalog licenses and sources.

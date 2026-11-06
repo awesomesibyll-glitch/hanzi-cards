@@ -5,8 +5,9 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import { gunzipSync } from 'node:zlib';
-import { validateBackup, mergeSyncRecords, syncPayload, openLibrary, snapshot, saveReview, addWord, createSet, setMembership, deleteSet, restoreBackup } from '../docs/storage.mjs';
+import { validateBackup, mergeSyncRecords, syncPayload, openLibrary, snapshot, saveReview, addWord, importWords, createSet, setMembership, deleteSet, restoreBackup } from '../docs/storage.mjs';
 import { findWords, indexWords, wordsInSet } from '../docs/library.mjs';
+import { previewImport } from '../docs/import-list.mjs';
 import { syncGitHub } from '../docs/sync.mjs';
 import { withContext, pinyinChoices, checkAnswer, clozeSentence, mistakeQueue, studyQueue, studySchedule } from '../docs/study.mjs';
 import { advancedExamples } from '../docs/advanced-examples.mjs';
@@ -36,7 +37,7 @@ test('service worker precaches every required file and serves cached assets offl
 });
 test('manifest uses project-relative URLs and includes iPhone installation metadata',()=>{
   const manifest=JSON.parse(readFileSync(resolve(root,'docs/manifest.webmanifest'),'utf8'));
-  assert.equal(manifest.start_url,'./library.html');assert.equal(manifest.id,'./');assert.equal(manifest.scope,'./');assert.equal(manifest.display,'standalone');
+  assert.equal(manifest.start_url,'./import.html');assert.equal(manifest.id,'./');assert.equal(manifest.scope,'./');assert.equal(manifest.display,'standalone');
   for(const icon of manifest.icons)assert.ok(existsSync(resolve(root,'docs',icon.src)));
   const html=readFileSync(resolve(root,'docs/index.html'),'utf8');assert.ok(html.includes('apple-touch-icon'));assert.ok(html.includes('viewport-fit=cover'));
 });
@@ -86,6 +87,20 @@ test('library search matches Hanzi, unaccented and numbered pinyin, and translat
   assert.equal(findWords(index,'hello')[0].id,'first');
   assert.equal(findWords(index,'ИДТИ')[0].id,'en');
   assert.deepEqual(wordsInSet(sample,{wordIds:['exact']}).map(word=>word.id),['exact']);
+});
+
+test('spreadsheet preview supports reordered headers, quoted cells, duplicates and invalid rows',()=>{
+  const english={sourceLanguage:'en-US',targetLanguage:'ru-RU',level:1,maxLevel:6};
+  const input='Перевод\tСлово\tПример\tПеревод примера\tУровень\r\n'
+    +'набросок\tdraft\t"She wrote a ""draft"".\nThen she edited it."\tОна написала черновик.\tB2\r\n'
+    +'черновик\tDRAFT\r\n\tmissing\r\nблокнот\tnotebook';
+  const result=previewImport(input,[{...english,text:'notebook'}],english);
+  assert.deepEqual(result.results.map(row=>[row.line,row.status]),[[2,'ready'],[4,'duplicate'],[5,'error'],[6,'duplicate']]);
+  assert.equal(result.added[0].sentence,'She wrote a "draft".\nThen she edited it.');
+  assert.equal(result.added[0].level,4);
+  const chinese={sourceLanguage:'zh-CN',targetLanguage:'en-US',level:1,maxLevel:7};
+  assert.equal(previewImport('新词\tnew word',[],chinese).results[0].status,'error');
+  assert.equal(previewImport('新词\tnew word\txīn cí',[],chinese).added[0].reading,'xīn cí');
 });
 
 test('GitHub sync encrypts and merges reviews and custom cards from two devices', async t => {
@@ -198,4 +213,13 @@ test('daily limit applies to first attempts only and the study state survives re
   await setMembership(setId,bank[0].id,false);
   assert.deepEqual((await snapshot()).sets[0].wordIds,['custom-persistence']);
   assert.equal((await snapshot()).reviews.length,1);
+  const importConfig={sourceLanguage:'zh-CN',targetLanguage:'en-US',level:1,maxLevel:7};
+  const staged=previewImport('新词\tnew word\txīn cí',[],importConfig).added;
+  assert.equal(await importWords(staged,'zh',setId),1);
+  assert.equal(await importWords(staged,'zh',setId),0);
+  const imported=await snapshot();
+  const newWord=imported.words.find(word=>word.text==='新词');
+  assert.ok(newWord.sentence);
+  assert.deepEqual(imported.sets[0].wordIds,['custom-persistence',newWord.id]);
+  assert.equal(imported.reviews.length,1);
 });

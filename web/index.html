@@ -60,6 +60,7 @@
     <section class="menu-group" aria-label="Library and data">
       <h3>Library &amp; data</h3>
       <button id="open-library" class="menu-item">Search &amp; study sets</button>
+      <button id="open-import" class="menu-item">Import word list</button>
       <button id="add-word" class="menu-item">Add a word</button>
       <button id="open-sync" class="menu-item">GitHub Sync</button>
       <button id="backup" class="menu-item">Export backup</button>
@@ -87,6 +88,19 @@
     <p id="search-count" role="status"></p>
     <ul id="search-results"></ul>
     <button id="more-results" class="secondary wide" hidden>Show more results</button>
+  </dialog>
+  <dialog id="import-dialog" aria-labelledby="import-title">
+    <form method="dialog"><button class="dialog-close" aria-label="Close import">×</button></form>
+    <h2 id="import-title">Import word list</h2>
+    <div class="form-row">
+      <label>Course<select id="import-course"><option value="zh">Chinese → English</option><option value="en">English → Russian</option></select></label>
+      <label>Add to<select id="import-set"></select></label>
+    </div>
+    <p>Copy cells from Excel or Google Sheets, then paste them here. Use <strong>Word, Translation, Pinyin or IPA, Sentence, Sentence translation, Level, Topic</strong> in that order, or include a header row. Chinese needs pinyin. Example and translation may be left blank together.</p>
+    <label>Spreadsheet rows<textarea id="import-text" rows="5" placeholder="Paste cells here" spellcheck="false"></textarea></label>
+    <div class="import-actions"><button id="preview-import" class="secondary">Preview</button><button id="confirm-import" class="primary" disabled>Import cards</button></div>
+    <p id="import-status" role="status"></p>
+    <ol id="import-preview"></ol>
   </dialog>
   <dialog id="help-dialog"><form method="dialog"><button class="dialog-close" aria-label="Close help">×</button><span class="eyebrow">TAKE YOUR PRACTICE WITH YOU</span><h2>Install Hanzi Cards</h2><h3>Windows</h3><p>In Microsoft Edge, open the <strong>…</strong> menu and choose <strong>More tools → Apps → Install this site as an app</strong>.</p><button type="button" id="install-desktop" class="secondary" hidden>Install app</button><h3>iPhone</h3><p>In Safari, tap <strong>Share → Add to Home Screen</strong>. Keep <strong>Open as Web App</strong> enabled if shown, then tap <strong>Add</strong>.</p><p id="installed-status" role="status"></p><h3>Ready for offline study</h3><p>Wait for “Ready offline” before disconnecting. Use <strong>GitHub Sync</strong> online to merge reviews and custom cards across devices. Safari and the Home Screen app may use separate storage.</p><h3>About the courses</h3><p>Chinese uses HSK 3.0 (2021). English uses community CEFR levels. English translations and levels were AI-generated and may contain errors. <a href="./THIRD_PARTY_NOTICES.md" target="_blank" rel="noopener">View vocabulary sources</a>.</p><h3>Pronunciation</h3><p>Choose a voice and speed in Audio settings. Download the corresponding system voice for offline playback.</p><button class="primary wide">Got it</button></form></dialog>
   <dialog id="sync-dialog" aria-labelledby="sync-title">

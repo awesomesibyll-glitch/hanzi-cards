@@ -1,9 +1,10 @@
 import { matchesStroke } from './modules/strokes.mjs';
-import { openLibrary, snapshot, saveReview, addWord, createSet, setMembership, deleteSet, restoreBackup, validateBackup, mergeSync, syncPayload, STORAGE_KEY } from './storage-v10.mjs';
+import { openLibrary, snapshot, saveReview, addWord, importWords, createSet, setMembership, deleteSet, restoreBackup, validateBackup, mergeSync, syncPayload, STORAGE_KEY } from './storage-v11.mjs';
 import { playAudio, stopAudio, audioPreference, availableVoices, englishAccent, prepareWordAudio } from './audio-v8.mjs';
 import { checkAnswer, clozeSentence, mistakeQueue, pinyinChoices, studyQueue, studySchedule } from './study-v8.mjs';
 import { syncGitHub } from './sync.mjs';
 import { findWords, indexWords, wordsInSet } from './library.mjs';
+import { previewImport } from './import-list.mjs';
 const $=id=>document.getElementById(id);
 const openPanel=id=>{$('menu-dialog').close();$(id).showModal();};
 for(const gesture of ['gesturestart','gesturechange'])document.addEventListener(gesture,event=>event.preventDefault(),{passive:false});
@@ -309,6 +310,69 @@ $('study-set').onclick=()=>{
   deck=set.course;safePreference('hanzi-deck',deck);activeSetId=set.id;
   mistakeSession=false;completedMistakes.clear();
   options();showNext();
+};
+let importDraft;
+function clearImportPreview(){
+  importDraft=undefined;
+  $('confirm-import').disabled=true;
+  $('import-status').textContent='';
+  $('import-preview').replaceChildren();
+}
+function importDestinations(preferred=''){
+  const sets=library.sets.filter(set=>set.course===$('import-course').value);
+  $('import-set').replaceChildren(new Option('Library only',''),...sets.map(set=>new Option(set.name,set.id)));
+  $('import-set').value=sets.some(set=>set.id===preferred)?preferred:'';
+}
+$('open-import').onclick=()=>{
+  if(!library||busy)return;
+  $('import-course').value=deck;
+  importDestinations(activeSetId);
+  clearImportPreview();
+  openPanel('import-dialog');
+};
+$('import-course').onchange=()=>{importDestinations();clearImportPreview();};
+$('import-set').onchange=$('import-text').oninput=clearImportPreview;
+$('preview-import').onclick=()=>{
+  if(busy||!library)return;
+  clearImportPreview();
+  const course=$('import-course').value,config=DECKS[course];
+  try{
+    const {added,results}=previewImport($('import-text').value,library.words,{
+      sourceLanguage:config.source,targetLanguage:config.target,level:1,maxLevel:config.labels.length
+    });
+    const duplicates=results.filter(row=>row.status==='duplicate').length;
+    const errors=results.filter(row=>row.status==='error').length;
+    $('import-status').textContent=results.length?`${added.length} ready · ${duplicates} duplicate · ${errors} invalid. Duplicates and invalid rows are skipped.`:'Paste at least one row.';
+    $('import-preview').replaceChildren(...results.map(({line,text,status,message})=>{
+      const row=document.createElement('li');
+      row.dataset.status=status;
+      const label={ready:'Ready',duplicate:'Duplicate',error:'Invalid'}[status];
+      row.textContent=`Row ${line} · ${label}${text?' · '+text:''} · ${message}`;
+      return row;
+    }));
+    if(added.length){
+      importDraft={added,course,setId:$('import-set').value};
+      $('confirm-import').disabled=false;
+    }
+  }catch(error){$('import-status').textContent=error.message;}
+};
+$('confirm-import').onclick=async()=>{
+  if(busy||!importDraft)return;
+  busy=true;
+  const {added,course,setId}=importDraft;
+  const inputs=['import-text','import-course','import-set','preview-import'].map($);
+  for(const input of inputs)input.disabled=true;
+  $('confirm-import').disabled=true;
+  try{
+    const count=await importWords(added,course,setId);
+    await reload();options();showNext();
+    clearImportPreview();
+    $('import-text').value='';
+    $('import-status').textContent=`Imported ${count} ${count===1?'card':'cards'}${setId?' into the selected set':''}.`;
+  }catch(error){
+    $('import-status').textContent=error.message;
+    $('confirm-import').disabled=!importDraft;
+  }finally{for(const input of inputs)input.disabled=false;busy=false;}
 };
 $('help').onclick=()=>{$('installed-status').textContent=(matchMedia('(display-mode: standalone)').matches||navigator.standalone)?'You are already using the installed web app.':'';openPanel('help-dialog');};
 const wordForm=$('word-form');
