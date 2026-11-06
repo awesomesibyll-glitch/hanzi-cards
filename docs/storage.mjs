@@ -46,7 +46,17 @@ export async function snapshot() {
     const item=saved.get(w.id)??freshProgress(w.id);
     return {...item,status:!item.due?'new':item.repetitions?'review':'learning'};
   });
-  return {version:1,exportedAt:new Date().toISOString(),words,progress,reviews:state.reviews,sets:state.sets??[],attribution:[{source:'Complete HSK Vocabulary / CC-CEDICT',url:'https://github.com/drkameleon/complete-hsk-vocabulary',license:'CC BY-SA 4.0 (adapted dictionary fields)'},{source:'Vocab Bloom Hub',url:'https://huggingface.co/datasets/Fristail27/vocab-bloom-hub-en',license:'CC BY 4.0',notice:'AI-generated, not human-verified; translations and CEFR levels may contain errors.'}]};
+  return {version:1,exportedAt:new Date().toISOString(),words,progress,reviews:state.reviews,sets:state.sets??[],refreshes:state.refreshes??{},attribution:[{source:'Complete HSK Vocabulary / CC-CEDICT',url:'https://github.com/drkameleon/complete-hsk-vocabulary',license:'CC BY-SA 4.0 (adapted dictionary fields)'},{source:'Vocab Bloom Hub',url:'https://huggingface.co/datasets/Fristail27/vocab-bloom-hub-en',license:'CC BY 4.0',notice:'AI-generated, not human-verified; translations and CEFR levels may contain errors.'}]};
+}
+export async function saveQuickRefresh(wordId,now=Date.now()){
+  await update(state=>{
+    const midnight=new Date(now);
+    midnight.setHours(0,0,0,0);
+    const seen=state.refreshes??={};
+    if(Object.values(seen).some(time=>time>=+midnight&&time<=now))return;
+    if(!catalog.has(wordId)&&!state.words.some(word=>word.id===wordId))return;
+    Object.defineProperty(seen,wordId,{value:now,writable:true,enumerable:true,configurable:true});
+  });
 }
 export async function saveReview(card,rating,now=Date.now(),limit=10,mistake=false) {
   if(!RATINGS.includes(rating))throw new Error('Unknown review rating');
@@ -162,6 +172,8 @@ export function validateBackup(data){
   }
   for(const r of data.reviews)if(!r||!ids.has(r.wordId)||!RATINGS.includes(r.rating)||![r.reviewedAt,r.nextDue].every(n=>Number.isFinite(n)&&n>=0&&n<=8.64e15))throw new Error('Invalid review history.');
   if(data.sets!==undefined)validateSets(data.sets,data.words);
+  if(data.refreshes!==undefined&&(!data.refreshes||typeof data.refreshes!=='object'||Array.isArray(data.refreshes)||
+      Object.entries(data.refreshes).some(([id,time])=>!ids.has(id)||!Number.isSafeInteger(time)||time<0||time>8.64e15)))throw new Error('Invalid refresh history.');
   return data;
 }
 export async function restoreBackup(data) {
@@ -170,7 +182,8 @@ export async function restoreBackup(data) {
     words:data.words.filter(w=>!catalog.has(w.id)).map(withContext),
     progress:data.progress.filter(p=>p.due),
     reviews:data.reviews,
-    sets:data.sets??[]
+    sets:data.sets??[],
+    refreshes:data.refreshes??{}
   }));
 }
 

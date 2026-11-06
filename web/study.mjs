@@ -139,3 +139,23 @@ export function mistakeQueue(cards,reviews,completed) {
     return second.count-first.count||second.last-first.last||a.id.localeCompare(b.id);
   });
 }
+
+export function quickRefresh(cards,reviews,seen,queueLength,now=Date.now()){
+  const midnight=new Date(now);
+  midnight.setHours(0,0,0,0);
+  const today=+midnight;
+  if(Object.values(seen).some(time=>time>=today&&time<=now))return null;
+  if(queueLength&&reviews.filter(review=>review.reviewedAt>=today&&review.reviewedAt<=now).length<5)return null;
+  const latest=new Map();
+  for(const review of reviews)if(review.reviewedAt<=now){
+    latest.set(review.wordId,Math.max(latest.get(review.wordId)??0,review.reviewedAt));
+  }
+  return cards.filter(card=>card.due>now&&card.interval>=7&&latest.has(card.id)&&now-latest.get(card.id)>=7*DAY)
+    .sort((a,b)=>(seen[a.id]??0)-(seen[b.id]??0)||latest.get(a.id)-latest.get(b.id)||a.id.localeCompare(b.id))[0]??null;
+}
+
+export function resumableCard(queue,refresh,saved,scope){
+  if(!saved||saved.scope!==scope)return null;
+  const card=saved.refresh?refresh:queue.find(item=>item.id===saved.wordId);
+  return card&&card.id===saved.wordId&&card.due===saved.due&&card.repetitions===saved.repetitions?card:null;
+}

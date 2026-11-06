@@ -40,6 +40,11 @@ The B2–C2 English examples are original sentences paired with Russian translat
 filters. It uses Poor ratings and incorrect typed answers saved with a grade.
 Practice does not record reviews, change due dates or consume the daily new-word cap.
 
+The browser remembers the current course, set, card and typed draft. On
+reopening, an eligible card returns with its previous answer state. A **Quick
+refresh** can bring back a learned card after five reviews that day or when
+the regular queue is empty, at most once a day. It leaves the due date intact.
+
 **Menu → Search & study sets** searches both courses by word, pinyin or
 translation. Create a named set, add existing words and choose **Study this
 set** to practise just those words with their usual review schedules. Sets are
