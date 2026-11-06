@@ -25,6 +25,11 @@ The tones mode accepts tone marks or numbered pinyin. The dictation uses
 the same scheduling as regular reviews. Sentence playback uses a system
 voice; word playback uses a matching human recording where available.
 
+**Reverse flashcards** and **Reverse · type the answer** prompt with the
+translation first. Each direction has its own review schedule, which is
+included in backups and in GitHub Sync. The daily limit counts a word once
+across both directions. Typed Chinese answers accept Hanzi or pinyin.
+
 **Study settings** switches between classic cards, typing the answer and
 **Fill the gap**. Gap-fill cards use examples containing the exact target word
 and share the same review schedule as the other modes. In

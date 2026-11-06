@@ -1,7 +1,7 @@
 import { matchesStroke } from './modules/strokes.mjs';
-import { openLibrary, snapshot, saveReview, saveQuickRefresh, addWord, importWords, createSet, setMembership, deleteSet, restoreBackup, validateBackup, mergeSync, syncPayload, STORAGE_KEY } from './storage-v13.mjs';
+import { openLibrary, snapshot, saveReview, saveQuickRefresh, addWord, importWords, createSet, setMembership, deleteSet, restoreBackup, validateBackup, mergeSync, syncPayload, STORAGE_KEY } from './storage-v14.mjs';
 import { playAudio, stopAudio, audioPreference, availableVoices, englishAccent, prepareWordAudio } from './audio-v12.mjs';
-import { checkAnswer, checkDictation, clozeSentence, mistakeQueue, pinyinChoices, quickRefresh, resumableCard, studyQueue, studySchedule } from './study-v13.mjs';
+import { checkAnswer, checkDictation, clozeSentence, mistakeQueue, pinyinChoices, quickRefresh, resumableCard, studyQueue, studySchedule } from './study-v14.mjs';
 import { syncGitHub } from './sync.mjs';
 import { findWords, indexWords, wordsInSet } from './library.mjs';
 import { previewImport } from './import-list.mjs';
@@ -31,6 +31,7 @@ function speakWord(notifyPlayback=audioStatus){
   if(card)void playAudio(card.text,card.sourceLanguage,notifyPlayback,{word:true,reading:card.reading,credit:recordingCredit});
 }
 const studyMode=()=>safePreference('hanzi-study-mode')||'classic';
+const reverseMode=()=>studyMode().startsWith('reverse-');
 let mistakeSession=false, incorrectAnswer=false, refreshing=false;
 const completedMistakes=new Set();
 function dictationMode(){
@@ -38,7 +39,8 @@ function dictationMode(){
   const mode=studyMode();
   return mode.startsWith('listen-')?(mode==='listen-tones'&&deck!=='zh'?'listen-word':mode):'';
 }
-const recallMode=()=>mistakeSession||Boolean(dictationMode())||['recall','cloze'].includes(studyMode());
+const recallMode=()=>mistakeSession||Boolean(dictationMode())||['recall','cloze','reverse-recall'].includes(studyMode());
+const reviewHistory=()=>reverseMode()?library.reverseReviews:library.reviews;
 const dailyLimit=()=>[10,20,50].includes(Number(safePreference('hanzi-daily-limit'))) ? Number(safePreference('hanzi-daily-limit')) : 10;
 const grades={Again:'Poor',Hard:'Fair',Good:'Good'};
 const DECKS={zh:{source:'zh-CN',target:'en-US',name:'Chinese → English',labels:['HSK 1','HSK 2','HSK 3','HSK 4','HSK 5','HSK 6','HSK 7–9']},en:{source:'en-US',target:'ru-RU',name:'English → Russian',labels:['A1 · Beginner','A2 · Elementary','B1 · Intermediate','B2 · Upper intermediate','C1 · Advanced','C2 · Proficiency']}};
@@ -96,26 +98,27 @@ function options(){
   renderPinyin();
 }
 function filteredCards(){
-  const progress=new Map(library.progress.map(p=>[p.wordId,p]));
+  const progress=new Map((reverseMode()?library.reverseProgress:library.progress).map(p=>[p.wordId,p]));
   const cloze=!mistakeSession&&studyMode()==='cloze';
   const set=activeSet(),words=deckWords();
   const selection=set?wordsInSet(words,set):words.filter(w=>(!Number($('level').value)||w.level===Number($('level').value))&&(!$('topic').value||w.topic===$('topic').value));
-  return selection.filter(word=>!cloze||clozeSentence(word)).map(w=>({...w,...progress.get(w.id)}));
+  return selection.filter(word=>!cloze||clozeSentence(word)).map(w=>({...w,...(progress.get(w.id)??{due:0,repetitions:0,interval:0,ease:2.5})}));
 }
 function currentQueue(cards,now=Date.now()){
-  if(mistakeSession)return {queue:mistakeQueue(cards,library.reviews,completedMistakes)};
-  const result=studyQueue(cards,library.reviews,dailyLimit(),now);
-  return {...result,refresh:quickRefresh(cards,library.reviews,library.refreshes,result.queue.length,now)};
+  const reviews=reviewHistory();
+  if(mistakeSession)return {queue:mistakeQueue(cards,reviews,completedMistakes)};
+  const result=studyQueue(cards,[...library.reviews,...library.reverseReviews],dailyLimit(),now);
+  return {...result,refresh:quickRefresh(cards,reviews,library.refreshes,result.queue.length,now)};
 }
 function renderStats(selection=currentQueue(filteredCards())){
   const midnight=new Date();midnight.setHours(0,0,0,0);
   $('due-count').textContent=selection.queue.length+Number(Boolean(selection.refresh));
-  const ids=new Set(deckWords().map(w=>w.id));$('today-count').textContent=library.reviews.filter(r=>ids.has(r.wordId)&&r.reviewedAt>=midnight.getTime()).length;
+  const ids=new Set(deckWords().map(w=>w.id));$('today-count').textContent=[...library.reviews,...library.reverseReviews].filter(r=>ids.has(r.wordId)&&r.reviewedAt>=midnight.getTime()).length;
   $('library-count').textContent=deckWords().length;
 }
 function showNext(){
   stopAnimation();clearInk();stopAudio();recordingCredit(null);audioStatus('');
-  const cards=filteredCards(),now=Date.now(),active=recallMode(),cloze=!mistakeSession&&studyMode()==='cloze',dictation=dictationMode();
+  const cards=filteredCards(),now=Date.now(),active=recallMode(),reverse=reverseMode(),cloze=!mistakeSession&&studyMode()==='cloze',dictation=dictationMode();
   const selection=currentQueue(cards,now),{queue,limited,refresh}=selection;
   const saved=readSession(),resumed=resumableCard(queue,refresh,saved,sessionScope());
   card=resumed??refresh??queue[0];
@@ -130,25 +133,26 @@ function showNext(){
   $('active-set-name').textContent=set?.name??'';
   document.querySelector('.toolbar').hidden=Boolean(set);
   $('due-label').textContent='left to study';
-  $('card').hidden=!card;$('empty').hidden=!!card;$('writing').hidden=!card||deck!=='zh'||active;
+  $('card').hidden=!card;$('empty').hidden=!!card;$('writing').hidden=!card||deck!=='zh'||active||reverse;
   if(!card){
     $('recall-form').reset();$('recall-feedback').hidden=true;saveSession();
     const next=cards.filter(c=>c.due>now).sort((a,b)=>a.due-b.due)[0];
     $('next-due').textContent=mistakeSession?(completedMistakes.size?'Practice complete for this selection.':'No mistakes in this selection yet. Cards appear here after a Poor rating or a graded incorrect answer.'):limited?'You reached today’s new-word limit. More new words will unlock tomorrow.':next?`Your next review is ${formatDue(next.due)}.`:cloze?'No gap-fill cards in this selection. Switch modes in Study settings for more cards.':set?'This set has no cards ready. Manage it in Search & study sets.':'No words match these filters. Choose another selection or add a word.';
     return;
   }
-  $('word').textContent=dictation?'':cloze?clozeSentence(card):active?card.translation:card.text;
+  $('word').textContent=dictation?'':cloze?clozeSentence(card):active||reverse?card.translation:card.text;
   $('word').hidden=Boolean(dictation);
   $('reading').textContent=card.reading;$('translation').textContent=card.translation;
   $('word').style.fontSize=deck==='en'?(card.text.length>14?'32px':'46px'):(Array.from(card.text).length>4?'46px':'');$('word').lang=card.sourceLanguage;$('translation').lang=card.targetLanguage;$('reading').lang=deck==='zh'?'zh-Latn':'en';$('play-zh').setAttribute('aria-label',`Play ${deck==='zh'?'Chinese':'English'} pronunciation`);$('play-en').textContent=`Listen in ${deck==='zh'?'English':'Russian'} ↗`;
-  $('word').classList.toggle('recall-prompt',active);
-  $('word').lang=active&&!cloze?card.targetLanguage:card.sourceLanguage;
-  $('play-zh').hidden=active&&!dictation;
+  $('word').classList.toggle('recall-prompt',active||reverse);
+  $('word').lang=(active||reverse)&&!cloze?card.targetLanguage:card.sourceLanguage;
+  $('play-zh').hidden=(active||reverse)&&!dictation;
   if(dictation)$('play-zh').setAttribute('aria-label',dictation==='listen-sentence'?'Play dictation sentence':'Play dictation word');
   $('sentence').textContent=card.sentence;$('sentence').lang=card.sourceLanguage;
   $('sentence-translation').textContent=card.sentenceTranslation;$('sentence-translation').lang=card.targetLanguage;
   $('context-label').textContent=card.contextKind==='practice'?'PRACTICE SENTENCE':'IN CONTEXT';
-  $('card-category').textContent=DECKS[deck].labels[card.level-1]?.split(' · ')[0]??card.level;
+  const level=DECKS[deck].labels[card.level-1]?.split(' · ')[0]??card.level;
+  $('card-category').textContent=reverse?`${level} · Reverse`:level;
   $('card-status').textContent=mistakeSession?'MISTAKE PRACTICE':refreshing?'QUICK REFRESH':card.due===0?'NEW WORD':'REVIEW';
   $('answer').hidden=true;$('ratings').hidden=true;$('reveal').hidden=active;$('card-prompt').hidden=!active;
   $('card-prompt').textContent=dictation==='listen-tones'?'Listen and type pinyin with tone marks or numbers, such as ni3.':
@@ -177,7 +181,7 @@ function showNext(){
     }
   }
   saveSession();
-  if(!active||dictation){
+  if((!active&&!reverse)||dictation){
     if(dictation!=='listen-sentence')prepareWordAudio(card.text,card.sourceLanguage,card.reading);
     if(!resumed&&!dictation&&$('auto-audio').checked)speakWord();
   }
@@ -186,7 +190,7 @@ async function reload(){library=await snapshot();renderStats();}
 async function rate(rating){
   if(busy||!card||!revealed||mistakeSession||refreshing)return;
   busy=true;const target=card;document.querySelectorAll('.rating-grid button').forEach(b=>b.disabled=true);
-  try{await saveReview(target,rating,Date.now(),dailyLimit(),incorrectAnswer);await reload();notify('');showNext();}
+  try{await saveReview(target,rating,Date.now(),dailyLimit(),incorrectAnswer,reverseMode());await reload();notify('');showNext();}
   catch(e){notify(e.message);await reload();showNext();}
   finally{busy=false;document.querySelectorAll('.rating-grid button').forEach(b=>b.disabled=false);}
 }
@@ -297,15 +301,17 @@ $('study-form').onsubmit=event=>{
   event.preventDefault();
   if(busy)return;
   try {
+    const wasReverse=reverseMode();
     localStorage.setItem('hanzi-study-mode',$('study-mode').value);
     localStorage.setItem('hanzi-daily-limit',$('daily-limit').value);
+    if(wasReverse!==reverseMode())completedMistakes.clear();
     $('study-dialog').close();
     if(library)showNext();
   } catch { notify('The browser could not save your study settings.'); }
 };
 $('refresh').onclick=()=>reload().then(showNext).catch(e=>notify(e.message));
 $('auto-audio').checked=safePreference('hanzi-auto-audio')==='true';
-$('auto-audio').onchange=()=>{safePreference('hanzi-auto-audio',String($('auto-audio').checked));if($('auto-audio').checked&&card&&(!recallMode()||revealed))speakWord();};
+$('auto-audio').onchange=()=>{safePreference('hanzi-auto-audio',String($('auto-audio').checked));if($('auto-audio').checked&&card&&((!recallMode()&&!reverseMode())||revealed))speakWord();};
 $('open-menu').onclick=()=>$('menu-dialog').showModal();
 $('leave-set').onclick=()=>{if(!busy){activeSetId='';showNext();}};
 const browseCourse=()=>$('library-course').value;
@@ -585,12 +591,13 @@ function voiceSettings(){
   $('speech-rate').value=audioPreference('speech-rate')||'1';
   $('rate-value').textContent=$('speech-rate').value+'×';
 }
-$('audio-settings').onclick=()=>{voiceSettings();$('audio-preview-status').textContent='';$('test-voice').disabled=!card||(recallMode()&&!revealed);openPanel('audio-dialog');};
+const canPreviewWord=()=>card&&(revealed||(!recallMode()&&!reverseMode()));
+$('audio-settings').onclick=()=>{voiceSettings();$('audio-preview-status').textContent='';$('test-voice').disabled=!canPreviewWord();openPanel('audio-dialog');};
 $('close-audio').onclick=()=>$('audio-dialog').close();
 $('english-accent').onchange=()=>{englishAccent($('english-accent').value);stopAudio();recordingCredit(null);voiceSettings();if(card&&(!recallMode()||revealed))prepareWordAudio(card.text,card.sourceLanguage,card.reading);};
 $('recording-mode').onchange=()=>{audioPreference('recording-mode',$('recording-mode').value);stopAudio();recordingCredit(null);if(card&&(!recallMode()||revealed))prepareWordAudio(card.text,card.sourceLanguage,card.reading);};
 $('speech-rate').oninput=()=>{audioPreference('speech-rate',$('speech-rate').value);$('rate-value').textContent=$('speech-rate').value+'×';};
-$('test-voice').onclick=()=>{if(card&&(!recallMode()||revealed))speakWord(message=>{$('audio-preview-status').textContent=message;});};
+$('test-voice').onclick=()=>{if(canPreviewWord())speakWord(message=>{$('audio-preview-status').textContent=message;});};
 window.speechSynthesis?.addEventListener('voiceschanged',()=>{if($('audio-dialog').open)voiceSettings();});
 
 async function offlineSetup(){

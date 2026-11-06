@@ -5,7 +5,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import { gunzipSync } from 'node:zlib';
-import { validateBackup, mergeSyncRecords, syncPayload, openLibrary, snapshot, saveReview, saveQuickRefresh, addWord, importWords, createSet, setMembership, deleteSet, restoreBackup } from '../docs/storage.mjs';
+import { validateBackup, mergeSync, mergeSyncRecords, syncPayload, openLibrary, snapshot, saveReview, saveQuickRefresh, addWord, importWords, createSet, setMembership, deleteSet, restoreBackup } from '../docs/storage.mjs';
 import { findWords, indexWords, wordsInSet } from '../docs/library.mjs';
 import { previewImport } from '../docs/import-list.mjs';
 import { syncGitHub } from '../docs/sync.mjs';
@@ -37,7 +37,7 @@ test('service worker precaches every required file and serves cached assets offl
 });
 test('manifest uses project-relative URLs and includes iPhone installation metadata',()=>{
   const manifest=JSON.parse(readFileSync(resolve(root,'docs/manifest.webmanifest'),'utf8'));
-  assert.equal(manifest.start_url,'./resume.html');assert.equal(manifest.id,'./');assert.equal(manifest.scope,'./');assert.equal(manifest.display,'standalone');
+  assert.equal(manifest.start_url,'./reverse.html');assert.equal(manifest.id,'./');assert.equal(manifest.scope,'./');assert.equal(manifest.display,'standalone');
   for(const icon of manifest.icons)assert.ok(existsSync(resolve(root,'docs',icon.src)));
   const html=readFileSync(resolve(root,'docs/index.html'),'utf8');assert.ok(html.includes('apple-touch-icon'));assert.ok(html.includes('viewport-fit=cover'));
 });
@@ -97,6 +97,13 @@ test('session resumes only the same eligible card and selection',()=>{
   assert.equal(resumableCard([card],null,saved,'another set'),null);
   assert.equal(resumableCard([{...card,due:60}],null,saved,saved.scope),null);
   assert.equal(resumableCard([],card,{...saved,refresh:true},saved.scope),card);
+});
+
+test('a known word in the other direction does not spend another new-word slot',()=>{
+  const now=new Date(2026,10,6,12).getTime();
+  const cards=[{id:'known',due:0},{id:'new',due:0}];
+  const history=[{wordId:'known',reviewedAt:now-1}];
+  assert.deepEqual(studyQueue(cards,history,1,now).queue.map(card=>card.id),['known']);
 });
 
 test('quick refresh rotates older learned cards at most once per day',()=>{
@@ -263,4 +270,17 @@ test('daily limit applies to first attempts only and the study state survives re
   assert.deepEqual(refreshed.refreshes,{[bank[0].id]:now});
   assert.deepEqual(refreshed.progress,imported.progress);
   assert.deepEqual(refreshed.reviews,imported.reviews);
+  await saveReview(fresh(bank[0].id),'Good',now,1,false,true);
+  const reversed=await snapshot();
+  assert.equal(reversed.progress[0].due,refreshed.progress[0].due);
+  assert.ok(reversed.reverseProgress[0].due>reversed.progress[0].due);
+  assert.equal(reversed.reviews[0].rating,'Again');
+  const payload=syncPayload(reversed);
+  assert.equal(payload.reverseReviews[0].rating,'Good');
+  await restoreBackup(refreshed);
+  await mergeSync([payload]);
+  assert.equal((await snapshot()).reverseReviews.length,1);
+  assert.equal((await snapshot()).reviews.length,1);
+  await restoreBackup(reversed);
+  assert.deepEqual((await snapshot()).reverseProgress,reversed.reverseProgress);
 });

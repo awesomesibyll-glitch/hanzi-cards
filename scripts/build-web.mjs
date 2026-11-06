@@ -17,14 +17,14 @@ cpSync(join(root,'licenses'),join(out,'licenses'),{recursive:true});
 cpSync(join(root,'THIRD_PARTY_NOTICES.md'),join(out,'THIRD_PARTY_NOTICES.md'));
 writeFileSync(join(out,'.nojekyll'),'');
 // Versioned entry assets avoid mixing cached modules with upgraded HTML.
-const versionedStudy=source=>source.replace("'./study.mjs'","'./study-v13.mjs'");
-writeFileSync(join(out,'app-v13.mjs'),versionedStudy(readFileSync(join(out,'app.mjs'),'utf8')).replace("'./storage.mjs'","'./storage-v13.mjs'").replace("'./audio.mjs'","'./audio-v12.mjs'"));
-writeFileSync(join(out,'storage-v13.mjs'),versionedStudy(readFileSync(join(out,'storage.mjs'),'utf8')));
-cpSync(join(out,'study.mjs'),join(out,'study-v13.mjs'));
+const versionedStudy=source=>source.replace("'./study.mjs'","'./study-v14.mjs'");
+writeFileSync(join(out,'app-v14.mjs'),versionedStudy(readFileSync(join(out,'app.mjs'),'utf8')).replace("'./storage.mjs'","'./storage-v14.mjs'").replace("'./audio.mjs'","'./audio-v12.mjs'"));
+writeFileSync(join(out,'storage-v14.mjs'),versionedStudy(readFileSync(join(out,'storage.mjs'),'utf8')));
+cpSync(join(out,'study.mjs'),join(out,'study-v14.mjs'));
 writeFileSync(join(out,'audio-v12.mjs'),readFileSync(join(out,'audio.mjs'),'utf8').replace("'./recordings.mjs'","'./recordings-v12.mjs'"));
 cpSync(join(out,'recordings.mjs'),join(out,'recordings-v12.mjs'));
 cpSync(join(out,'styles.css'),join(out,'styles-v11.css'));
-const html=readFileSync(join(out,'index.html'),'utf8').replace('./app.mjs','./app-v13.mjs').replace('./styles.css','./styles-v11.css');
+const html=readFileSync(join(out,'index.html'),'utf8').replace('./app.mjs','./app-v14.mjs').replace('./styles.css','./styles-v11.css');
 writeFileSync(join(out,'index.html'),html);
 writeFileSync(join(out,'study.html'),html);
 writeFileSync(join(out,'devices.html'),html);
@@ -38,6 +38,7 @@ writeFileSync(join(out,'library.html'),html);
 writeFileSync(join(out,'import.html'),html);
 writeFileSync(join(out,'dictation.html'),html);
 writeFileSync(join(out,'resume.html'),html);
+writeFileSync(join(out,'reverse.html'),html);
 const files=['./'];
 const hash=createHash('sha256');
 function walk(dir){for(const entry of readdirSync(dir,{withFileTypes:true}).sort((a,b)=>a.name<b.name?-1:a.name>b.name?1:0)){const path=join(dir,entry.name);if(entry.isDirectory())walk(path);else{if(!/\.(png|gz|bin)$/.test(path))writeFileSync(path,readFileSync(path,'utf8').replaceAll('\r\n','\n'));files.push('./'+path.slice(out.length+1).replaceAll('\\','/'));hash.update(readFileSync(path));}}}

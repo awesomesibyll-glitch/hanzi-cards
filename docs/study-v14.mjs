@@ -114,6 +114,7 @@ export function studyQueue(cards, reviews, limit, now = Date.now()) {
   day.setHours(0,0,0,0);
   const firstReviews = new Map();
   for (const review of reviews) {
+    if(review.reviewedAt>now)continue;
     const previous = firstReviews.get(review.wordId) ?? Infinity;
     if (review.reviewedAt < previous) firstReviews.set(review.wordId, review.reviewedAt);
   }
@@ -122,7 +123,10 @@ export function studyQueue(cards, reviews, limit, now = Date.now()) {
   const due = cards.filter(card => card.due > 0 && card.due <= now).sort((a,b) => a.due - b.due || byRank(a,b));
   const fresh = cards.filter(card => !card.due).sort(byRank);
   const remaining = Math.max(0, limit - startedToday);
-  return {queue:[...due,...fresh.slice(0,remaining)], limited:fresh.length > remaining};
+  const newCards=fresh.filter(card=>!firstReviews.has(card.id));
+  const allowed=new Set(newCards.slice(0,remaining).map(card=>card.id));
+  const available=fresh.filter(card=>firstReviews.has(card.id)||allowed.has(card.id));
+  return {queue:[...due,...available], limited:available.length < fresh.length};
 }
 
 export function mistakeQueue(cards,reviews,completed) {

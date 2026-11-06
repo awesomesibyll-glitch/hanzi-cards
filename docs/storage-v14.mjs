@@ -1,4 +1,4 @@
-import { studyQueue, studySchedule, withContext } from './study-v13.mjs';
+import { studyQueue, studySchedule, withContext } from './study-v14.mjs';
 import { importWordKey } from './import-list.mjs';
 export const RATINGS = ['Again', 'Hard', 'Good', 'Easy'];
 export const STORAGE_KEY = 'hanzi-study-v4';
@@ -46,7 +46,7 @@ export async function snapshot() {
     const item=saved.get(w.id)??freshProgress(w.id);
     return {...item,status:!item.due?'new':item.repetitions?'review':'learning'};
   });
-  return {version:1,exportedAt:new Date().toISOString(),words,progress,reviews:state.reviews,sets:state.sets??[],refreshes:state.refreshes??{},attribution:[{source:'Complete HSK Vocabulary / CC-CEDICT',url:'https://github.com/drkameleon/complete-hsk-vocabulary',license:'CC BY-SA 4.0 (adapted dictionary fields)'},{source:'Vocab Bloom Hub',url:'https://huggingface.co/datasets/Fristail27/vocab-bloom-hub-en',license:'CC BY 4.0',notice:'AI-generated, not human-verified; translations and CEFR levels may contain errors.'}]};
+  return {version:1,exportedAt:new Date().toISOString(),words,progress,reviews:state.reviews,reverseProgress:state.reverseProgress??[],reverseReviews:state.reverseReviews??[],sets:state.sets??[],refreshes:state.refreshes??{},attribution:[{source:'Complete HSK Vocabulary / CC-CEDICT',url:'https://github.com/drkameleon/complete-hsk-vocabulary',license:'CC BY-SA 4.0 (adapted dictionary fields)'},{source:'Vocab Bloom Hub',url:'https://huggingface.co/datasets/Fristail27/vocab-bloom-hub-en',license:'CC BY 4.0',notice:'AI-generated, not human-verified; translations and CEFR levels may contain errors.'}]};
 }
 export async function saveQuickRefresh(wordId,now=Date.now()){
   await update(state=>{
@@ -58,18 +58,20 @@ export async function saveQuickRefresh(wordId,now=Date.now()){
     Object.defineProperty(seen,wordId,{value:now,writable:true,enumerable:true,configurable:true});
   });
 }
-export async function saveReview(card,rating,now=Date.now(),limit=10,mistake=false) {
+export async function saveReview(card,rating,now=Date.now(),limit=10,mistake=false,reverse=false) {
   if(!RATINGS.includes(rating))throw new Error('Unknown review rating');
   await update(state=>{
-    const index=state.progress.findIndex(p=>p.wordId===card.id);
-    const current=state.progress[index]??freshProgress(card.id);
+    const progress=reverse?(state.reverseProgress??=[]):state.progress;
+    const reviews=reverse?(state.reverseReviews??=[]):state.reviews;
+    const index=progress.findIndex(p=>p.wordId===card.id);
+    const current=progress[index]??freshProgress(card.id);
     if ((!catalog.has(card.id)&&!state.words.some(w=>w.id===card.id))||current.due!==card.due||current.repetitions!==card.repetitions) {
       throw new Error('This card changed in another tab. Your queue has been refreshed.');
     }
-    if (!current.due && !studyQueue([card],state.reviews,limit,now).queue.length) throw new Error('You reached today’s new-word limit.');
+    if (!current.due && !studyQueue([card],[...state.reviews,...(state.reverseReviews??[])],limit,now).queue.length) throw new Error('You reached today’s new-word limit.');
     const next={...studySchedule(current,rating,now),wordId:card.id};
-    if(index===-1)state.progress.push(next);else state.progress[index]=next;
-    state.reviews.push({wordId:card.id,rating,reviewedAt:now,nextDue:next.due,rule:2,...(mistake&&{mistake:true})});
+    if(index===-1)progress.push(next);else progress[index]=next;
+    reviews.push({wordId:card.id,rating,reviewedAt:now,nextDue:next.due,rule:2,...(mistake&&{mistake:true})});
   });
 }
 export async function addWord(word) {
@@ -164,17 +166,21 @@ function validateWords(words) {
 export function validateBackup(data){
   if(data?.version!==1)throw new Error('Unsupported backup version.');
   const ids=validateWords(data.words);
-  if(!Array.isArray(data.progress)||data.progress.length!==ids.size||!Array.isArray(data.reviews)||data.reviews.length>100000)throw new Error('Invalid backup records.');
-  const seen=new Set();
-  for(const p of data.progress){
-    if(!p||!ids.has(p.wordId)||seen.has(p.wordId)||![p.repetitions,p.interval,p.ease,p.due].every(Number.isFinite)||!Number.isInteger(p.repetitions)||p.repetitions<0||p.repetitions>1000000||p.interval<0||p.interval>36500||p.ease<1.3||p.ease>10||p.due<0||p.due>8.64e15)throw new Error('Invalid study progress.');
-    seen.add(p.wordId);
-  }
-  for(const r of data.reviews)if(!r||!ids.has(r.wordId)||!RATINGS.includes(r.rating)||![r.reviewedAt,r.nextDue].every(n=>Number.isFinite(n)&&n>=0&&n<=8.64e15))throw new Error('Invalid review history.');
+  validateHistory(data.progress,data.reviews,ids,true);
+  validateHistory(data.reverseProgress===undefined?[]:data.reverseProgress,data.reverseReviews===undefined?[]:data.reverseReviews,ids,false);
   if(data.sets!==undefined)validateSets(data.sets,data.words);
   if(data.refreshes!==undefined&&(!data.refreshes||typeof data.refreshes!=='object'||Array.isArray(data.refreshes)||
       Object.entries(data.refreshes).some(([id,time])=>!ids.has(id)||!Number.isSafeInteger(time)||time<0||time>8.64e15)))throw new Error('Invalid refresh history.');
   return data;
+}
+function validateHistory(progress,reviews,ids,full){
+  if(!Array.isArray(progress)||progress.length>ids.size||(full&&progress.length!==ids.size)||!Array.isArray(reviews)||reviews.length>100000)throw new Error('Invalid backup records.');
+  const seen=new Set();
+  for(const p of progress){
+    if(!p||!ids.has(p.wordId)||seen.has(p.wordId)||![p.repetitions,p.interval,p.ease,p.due].every(Number.isFinite)||!Number.isInteger(p.repetitions)||p.repetitions<0||p.repetitions>1000000||p.interval<0||p.interval>36500||p.ease<1.3||p.ease>10||p.due<0||p.due>8.64e15)throw new Error('Invalid study progress.');
+    seen.add(p.wordId);
+  }
+  for(const r of reviews)if(!r||!ids.has(r.wordId)||!RATINGS.includes(r.rating)||![r.reviewedAt,r.nextDue].every(n=>Number.isFinite(n)&&n>=0&&n<=8.64e15))throw new Error('Invalid review history.');
 }
 export async function restoreBackup(data) {
   validateBackup(data);
@@ -182,6 +188,8 @@ export async function restoreBackup(data) {
     words:data.words.filter(w=>!catalog.has(w.id)).map(withContext),
     progress:data.progress.filter(p=>p.due),
     reviews:data.reviews,
+    reverseProgress:(data.reverseProgress??[]).filter(p=>p.due),
+    reverseReviews:data.reverseReviews??[],
     sets:data.sets??[],
     refreshes:data.refreshes??{}
   }));
@@ -191,11 +199,13 @@ const freshProgress = wordId => ({wordId, repetitions:0, interval:0, ease:2.5, d
 const reviewKey = ({wordId, rating, reviewedAt}) => JSON.stringify([wordId, rating, reviewedAt]);
 const compareReviews = (a, b) => a.reviewedAt - b.reviewedAt || RATINGS.indexOf(a.rating) - RATINGS.indexOf(b.rating);
 
-export function syncPayload({words, reviews}) {
+const syncReviews=reviews=>reviews.map(({wordId,rating,reviewedAt,rule,mistake})=>({wordId,rating,reviewedAt,rule,...(mistake===true&&{mistake:true})}));
+export function syncPayload({words, reviews, reverseReviews=[]}) {
   return {
     version:1,
     words:words.filter(word => word.id.startsWith('custom-')),
-    reviews:reviews.map(({wordId, rating, reviewedAt, rule, mistake}) => ({wordId, rating, reviewedAt, rule,...(mistake===true&&{mistake:true})}))
+    reviews:syncReviews(reviews),
+    ...(reverseReviews.length&&{reverseReviews:syncReviews(reverseReviews)})
   };
 }
 
@@ -257,11 +267,21 @@ export function mergeSyncRecords(words, reviews, backups) {
 export async function mergeSync(backups) {
   await update(state=>{
     const changes=mergeSyncRecords([...catalog.values(),...state.words],state.reviews,backups);
-    for(const review of state.reviews)if(changes.mistakeUpdates.has(reviewKey(review)))review.mistake=true;
     state.words.push(...changes.words);
-    state.reviews.push(...changes.reviews);
-    const progress=new Map(state.progress.map(p=>[p.wordId,p]));
-    for(const item of changes.progress)if(item.due)progress.set(item.wordId,item);
-    state.progress=[...progress.values()];
+    state.progress=applyHistory(state.progress,state.reviews,changes);
+    const reverseBackups=backups.filter(backup=>backup.reverseReviews!==undefined)
+      .map(backup=>({version:1,words:[],reviews:backup.reverseReviews}));
+    if(reverseBackups.length){
+      const reviews=state.reverseReviews??=[];
+      const reverseChanges=mergeSyncRecords([...catalog.values(),...state.words],reviews,reverseBackups);
+      state.reverseProgress=applyHistory(state.reverseProgress??[],reviews,reverseChanges);
+    }
   });
+}
+function applyHistory(previous,reviews,changes){
+  for(const review of reviews)if(changes.mistakeUpdates.has(reviewKey(review)))review.mistake=true;
+  reviews.push(...changes.reviews);
+  const progress=new Map(previous.map(p=>[p.wordId,p]));
+  for(const item of changes.progress)if(item.due)progress.set(item.wordId,item);
+  return [...progress.values()];
 }
