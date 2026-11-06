@@ -38,6 +38,26 @@ app and may also differ between Safari and the installed Home Screen app.
 Export and restore a backup to transfer it. Clearing website data can delete it.
 Offline speech depends on downloaded system voices; tap Play to enable speech.
 
+## Install on Windows and sync across devices
+
+Open [Hanzi Cards](https://awesomesibyll-glitch.github.io/hanzi-cards/devices.html)
+in Microsoft Edge. Choose **… → More tools → Apps → Install this site as an app**.
+Launch it from Start or pin it to the taskbar.
+
+1. Create a [fine-grained GitHub token](https://github.com/settings/tokens?type=beta)
+   with the account permission **Gists: Read and write**. Repository access is unnecessary.
+2. On the device with your existing progress, open **GitHub Sync**. Enter the token
+   and a strong sync password of at least 12 characters. Leave **Sync ID** blank,
+   press **Sync now**, then copy the resulting ID.
+3. On the second device, enter the ID, the same password, and a token from the same
+   GitHub account. Press **Sync now**. Run sync on each device when switching.
+
+This feature syncs reviews and custom cards in the installed web app. It merges
+review history and rebuilds affected schedules. Audio settings and cached audio
+stay local. A secret GitHub Gist contains encrypted data and random device IDs.
+The app keeps the token and password in memory until you reload or close the app.
+Keep a copy of the password and ID in your password manager.
+
 Source: `web/`. Built static app: `docs/`. The `docs/` directory can also be
 published with GitHub Pages using **main /docs** as the source. In repository
 Settings → Pages, choose **Deploy from a branch**, **main**, **/docs**, then Save.

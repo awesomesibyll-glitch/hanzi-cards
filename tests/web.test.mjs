@@ -5,7 +5,8 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import { gunzipSync } from 'node:zlib';
-import { validateBackup } from '../docs/storage.mjs';
+import { validateBackup, mergeSyncRecords, syncPayload } from '../docs/storage.mjs';
+import { syncGitHub } from '../docs/sync.mjs';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const catalog=JSON.parse(readFileSync(resolve(root,'docs/data/catalog.json'),'utf8'));
 const words=JSON.parse(gunzipSync(Buffer.concat(catalog.packs.words.map(file=>readFileSync(resolve(root,'docs/data',file))))).toString('utf8'));
@@ -32,7 +33,60 @@ test('service worker precaches every required file and serves cached assets offl
 });
 test('manifest uses project-relative URLs and includes iPhone installation metadata',()=>{
   const manifest=JSON.parse(readFileSync(resolve(root,'docs/manifest.webmanifest'),'utf8'));
-  assert.equal(manifest.start_url,'./study.html');assert.equal(manifest.scope,'./');assert.equal(manifest.display,'standalone');
+  assert.equal(manifest.start_url,'./devices.html');assert.equal(manifest.id,'./');assert.equal(manifest.scope,'./');assert.equal(manifest.display,'standalone');
   for(const icon of manifest.icons)assert.ok(existsSync(resolve(root,'docs',icon.src)));
   const html=readFileSync(resolve(root,'docs/index.html'),'utf8');assert.ok(html.includes('apple-touch-icon'));assert.ok(html.includes('viewport-fit=cover'));
+});
+
+test('GitHub sync encrypts and merges reviews and custom cards from two devices', async t => {
+  const id = 'a'.repeat(32);
+  const token = 'test-token';
+  const password = 'a long test password';
+  let gist;
+  let writes = 0;
+  t.mock.method(globalThis, 'fetch', async (url, request) => {
+    assert.equal(request.headers.Authorization, 'Bearer ' + token);
+    assert.equal(url, 'https://api.github.com/gists' + (request.method === 'POST' ? '' : '/' + id));
+    if (request.method === 'POST') {
+      const body = JSON.parse(request.body);
+      assert.equal(body.public, false);
+      gist = {id, public:false, files:body.files};
+      writes++;
+    } else if (request.method === 'PATCH') {
+      const {files} = JSON.parse(request.body);
+      assert.equal(Object.keys(files).length, 1);
+      Object.assign(gist.files, files);
+      writes++;
+    }
+    return Response.json(gist);
+  });
+  const seed = words[0];
+  const custom = {...seed, id:'custom-test', text:'test custom word'};
+  function device(words, reviews) {
+    return {
+      device:crypto.randomUUID(),
+      local:async () => syncPayload({words,reviews}),
+      merge:async incoming => {
+        const changes = mergeSyncRecords(words,reviews,incoming);
+        words.push(...changes.words);
+        reviews.push(...changes.reviews);
+        return changes;
+      },
+      words,reviews
+    };
+  }
+  const first = device([seed, custom], [{wordId:seed.id,rating:'Good',reviewedAt:100}]);
+  const second = device([seed], [{wordId:seed.id,rating:'Easy',reviewedAt:200}]);
+  assert.equal(await syncGitHub({token,password,id:'',...first}), id);
+  assert.ok(!JSON.stringify(gist).includes(custom.text));
+  assert.ok(!JSON.stringify(gist).includes(password));
+  await assert.rejects(syncGitHub({token,password:'wrong test password',id,...second}), /incorrect/);
+  assert.equal(writes,1);
+  await syncGitHub({token,password,id,...second});
+  await syncGitHub({token,password,id,...first});
+  assert.equal(Object.keys(gist.files).length,3);
+  assert.deepEqual(second.words, first.words);
+  assert.deepEqual(first.reviews.map(r=>r.rating).sort(), ['Easy','Good']);
+  assert.deepEqual(second.reviews.map(r=>r.rating).sort(), ['Easy','Good']);
+  assert.deepEqual((await first.merge([await second.local()])).reviews, []);
 });

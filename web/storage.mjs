@@ -84,3 +84,86 @@ export async function restoreBackup(data) {
   for(const r of data.reviews){const {id,...review}=r;tx.objectStore('reviews').add(review);}
   await done;
 }
+
+const freshProgress = wordId => ({wordId, repetitions:0, interval:0, ease:2.5, due:0});
+const reviewKey = ({wordId, rating, reviewedAt}) => JSON.stringify([wordId, rating, reviewedAt]);
+const compareReviews = (a, b) => a.reviewedAt - b.reviewedAt || RATINGS.indexOf(a.rating) - RATINGS.indexOf(b.rating);
+
+export function syncPayload({words, reviews}) {
+  return {
+    version:1,
+    words:words.filter(word => word.id.startsWith('custom-')),
+    reviews:reviews.map(({wordId, rating, reviewedAt}) => ({wordId, rating, reviewedAt}))
+  };
+}
+
+export function mergeSyncRecords(words, reviews, backups) {
+  const wordIds = new Set(words.map(word => word.id));
+  const reviewIds = new Set(reviews.map(reviewKey));
+  const newWords = [];
+  const newReviews = [];
+  const addedReviews = new Set();
+  const byWord = new Map();
+  for (const backup of backups) {
+    if (backup?.version !== 1 || !Array.isArray(backup.reviews)) throw new Error('Unsupported sync data.');
+    validateWords(backup.words);
+    for (const word of backup.words) {
+      if (!word.id.startsWith('custom-')) throw new Error('Invalid custom card in sync data.');
+      if (wordIds.has(word.id)) continue;
+      wordIds.add(word.id);
+      newWords.push(word);
+    }
+  }
+  for (const backup of backups) {
+    for (const review of backup.reviews) {
+      if (!review || typeof review.wordId !== 'string' || !RATINGS.includes(review.rating) ||
+          !Number.isSafeInteger(review.reviewedAt) || review.reviewedAt < 0 || review.reviewedAt > 8e15) {
+        throw new Error('Invalid review in sync data.');
+      }
+      if (!wordIds.has(review.wordId)) continue;
+      const key = reviewKey(review);
+      if (reviewIds.has(key)) continue;
+      reviewIds.add(key);
+      const clean = {wordId:review.wordId, rating:review.rating, reviewedAt:review.reviewedAt};
+      newReviews.push(clean);
+      addedReviews.add(clean);
+      if (!byWord.has(clean.wordId)) byWord.set(clean.wordId, []);
+      byWord.get(clean.wordId).push(clean);
+    }
+  }
+  for (const review of reviews) byWord.get(review.wordId)?.push(review);
+  const progress = new Map(newWords.map(word => [word.id, freshProgress(word.id)]));
+  for (const [wordId, history] of byWord) {
+    let state = freshProgress(wordId);
+    for (const review of history.sort(compareReviews)) {
+      state = schedule(state, review.rating, review.reviewedAt);
+      if (addedReviews.has(review)) review.nextDue = state.due;
+    }
+    progress.set(wordId, {...state, wordId});
+  }
+  return {words:newWords, reviews:newReviews, progress:[...progress.values()]};
+}
+
+export async function mergeSync(backups) {
+  const tx = db.transaction(['words','progress','reviews'], 'readwrite');
+  const done = completed(tx);
+  const words = tx.objectStore('words').getAll();
+  const reviews = tx.objectStore('reviews').getAll();
+  let mergeError;
+  reviews.onsuccess = () => {
+    try {
+      const changes = mergeSyncRecords(words.result, reviews.result, backups);
+      for (const word of changes.words) tx.objectStore('words').add(word);
+      for (const review of changes.reviews) tx.objectStore('reviews').add(review);
+      for (const progress of changes.progress) tx.objectStore('progress').put(progress);
+    } catch (error) {
+      mergeError = error;
+      tx.abort();
+    }
+  };
+  try {
+    await done;
+  } catch (error) {
+    throw mergeError ?? error;
+  }
+}

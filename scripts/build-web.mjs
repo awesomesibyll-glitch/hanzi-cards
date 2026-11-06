@@ -16,14 +16,14 @@ if(!readdirSync(join(out,'data')).includes('catalog.json')){
 cpSync(join(root,'licenses'),join(out,'licenses'),{recursive:true});
 cpSync(join(root,'THIRD_PARTY_NOTICES.md'),join(out,'THIRD_PARTY_NOTICES.md'));
 writeFileSync(join(out,'.nojekyll'),'');
-// Versioned entry assets let an existing v1 service worker fetch the upgrade
-// without accidentally mixing its cached v1 modules with the new HTML.
-writeFileSync(join(out,'app-v2.mjs'),readFileSync(join(out,'app.mjs'),'utf8').replace("'./storage.mjs'","'./storage-v2.mjs'"));
-cpSync(join(out,'storage.mjs'),join(out,'storage-v2.mjs'));
-cpSync(join(out,'styles.css'),join(out,'styles-v2.css'));
-const html=readFileSync(join(out,'index.html'),'utf8').replace('./app.mjs','./app-v2.mjs').replace('./styles.css','./styles-v2.css');
+// Versioned entry assets avoid mixing cached modules with upgraded HTML.
+writeFileSync(join(out,'app-v3.mjs'),readFileSync(join(out,'app.mjs'),'utf8').replace("'./storage.mjs'","'./storage-v3.mjs'"));
+cpSync(join(out,'storage.mjs'),join(out,'storage-v3.mjs'));
+cpSync(join(out,'styles.css'),join(out,'styles-v3.css'));
+const html=readFileSync(join(out,'index.html'),'utf8').replace('./app.mjs','./app-v3.mjs').replace('./styles.css','./styles-v3.css');
 writeFileSync(join(out,'index.html'),html);
 writeFileSync(join(out,'study.html'),html);
+writeFileSync(join(out,'devices.html'),html);
 const files=['./'];
 const hash=createHash('sha256');
 function walk(dir){for(const entry of readdirSync(dir,{withFileTypes:true}).sort((a,b)=>a.name<b.name?-1:a.name>b.name?1:0)){const path=join(dir,entry.name);if(entry.isDirectory())walk(path);else{if(!/\.(png|gz|bin)$/.test(path))writeFileSync(path,readFileSync(path,'utf8').replaceAll('\r\n','\n'));files.push('./'+path.slice(out.length+1).replaceAll('\\','/'));hash.update(readFileSync(path));}}}

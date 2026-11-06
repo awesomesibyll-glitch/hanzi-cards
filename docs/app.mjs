@@ -1,7 +1,8 @@
 import { schedule } from './modules/srs.mjs';
 import { matchesStroke } from './modules/strokes.mjs';
-import { openLibrary, snapshot, saveReview, addWord, restoreBackup, validateBackup, RATINGS } from './storage.mjs';
+import { openLibrary, snapshot, saveReview, addWord, restoreBackup, validateBackup, mergeSync, syncPayload, RATINGS } from './storage.mjs';
 import { playAudio, stopAudio, warmAudio, audioPreference, availableVoices } from './audio.mjs';
+import { syncGitHub } from './sync.mjs';
 const $=id=>document.getElementById(id);
 const svgNS='http://www.w3.org/2000/svg';
 let library,card,strokeBank={},busy=false,revealed=false,currentCharacter='',strokeIndex=0,entry,points=[],pointer=null,animation=null,offlineReady=false;
@@ -138,7 +139,7 @@ $('reveal').onclick=reveal;$('play-zh').onclick=()=>card&&speak(card.text,card.s
 $('refresh').onclick=()=>reload().then(showNext).catch(e=>notify(e.message));
 $('auto-audio').checked=safePreference('hanzi-auto-audio')==='true';
 $('auto-audio').onchange=()=>{safePreference('hanzi-auto-audio',String($('auto-audio').checked));if($('auto-audio').checked&&card)speak(card.text,card.sourceLanguage);};
-$('help').onclick=()=>{$('installed-status').textContent=(matchMedia('(display-mode: standalone)').matches||navigator.standalone)?'You are already using the installed web app.':'Install from Safari to open Hanzi Cards as its own app.';$('help-dialog').showModal();};
+$('help').onclick=()=>{$('installed-status').textContent=(matchMedia('(display-mode: standalone)').matches||navigator.standalone)?'You are already using the installed web app.':'';$('help-dialog').showModal();};
 $('add-word').onclick=()=>$('add-dialog').showModal();$('close-add').onclick=()=>$('add-dialog').close();
 $('word-form').onsubmit=async e=>{
   e.preventDefault();if(busy)return;busy=true;
@@ -160,6 +161,74 @@ $('restore').onchange=async e=>{
   }catch(e){notify(`Backup was not restored: ${e.message}`);}finally{busy=false;e.target.value='';}
 };
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&!document.querySelector('dialog[open]')&&!['INPUT','SELECT','BUTTON'].includes(document.activeElement.tagName)){e.preventDefault();reveal();}});
+let installPrompt;
+window.addEventListener('beforeinstallprompt', event => {
+  event.preventDefault();
+  installPrompt = event;
+  $('install-desktop').hidden = false;
+});
+window.addEventListener('appinstalled', () => {
+  installPrompt = undefined;
+  $('install-desktop').hidden = true;
+  $('installed-status').textContent = 'Hanzi Cards is installed.';
+});
+$('install-desktop').onclick = async () => {
+  if (!installPrompt) return;
+  const prompt = installPrompt;
+  installPrompt = undefined;
+  $('install-desktop').hidden = true;
+  try { await prompt.prompt(); }
+  catch { $('installed-status').textContent = 'Use the browser menu to install Hanzi Cards.'; }
+};
+
+const syncDialog = $('sync-dialog');
+$('open-sync').onclick = () => {
+  $('sync-id').value = safePreference('hanzi-sync-id') || '';
+  syncDialog.showModal();
+};
+$('close-sync').onclick = () => syncDialog.close();
+$('copy-sync-id').onclick = async () => {
+  const id = $('sync-id').value;
+  if (!id) return;
+  try { await navigator.clipboard.writeText(id); $('sync-status').textContent = 'Sync ID copied.'; }
+  catch { $('sync-id').select(); $('sync-status').textContent = 'Copy the selected Sync ID.'; }
+};
+$('sync-form').onsubmit = async event => {
+  event.preventDefault();
+  if (busy || !library) {
+    $('sync-status').textContent = 'Wait for the library or the current save to finish.';
+    return;
+  }
+  busy = true;
+  const submit = $('sync-submit');
+  submit.disabled = true;
+  $('sync-status').textContent = 'Syncing with GitHub…';
+  try {
+    const run = async () => {
+      const device = safePreference('hanzi-sync-device') || crypto.randomUUID();
+      safePreference('hanzi-sync-device', device);
+      if (safePreference('hanzi-sync-device') !== device) throw new Error('Allow local storage to link this device.');
+      const id = await syncGitHub({
+        device, id:$('sync-id').value.trim().toLowerCase(),
+        token:$('sync-token').value.trim(), password:$('sync-password').value,
+        local:async () => syncPayload(await snapshot()), merge:mergeSync
+      });
+      $('sync-id').value = id;
+      safePreference('hanzi-sync-id', id);
+    };
+    if (navigator.locks) await navigator.locks.request('hanzi-github-sync', run);
+    else await run();
+    await reload();
+    options();
+    showNext();
+    $('sync-status').textContent = 'Synced. Use this Sync ID and the same password on your other devices.';
+  } catch (error) {
+    $('sync-status').textContent = 'Sync failed. ' + error.message;
+  } finally {
+    submit.disabled = false;
+    busy = false;
+  }
+};
 window.addEventListener('library-error',e=>notify(e.detail));
 document.addEventListener('visibilitychange',()=>{if(document.hidden){stopAnimation();stopAudio();}else if(library&&!busy)reload().then(()=>{if(!card)showNext();}).catch(e=>notify(e.message));});
 setInterval(()=>{if(library&&!busy&&!document.hidden){renderStats();if(!card)showNext();}},15000);
