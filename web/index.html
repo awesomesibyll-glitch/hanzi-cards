@@ -24,6 +24,7 @@
       <nav class="deck-tabs" role="tablist" aria-label="Language course"><button id="deck-zh" role="tab" class="active"><span>Chinese</span><small>→ English</small></button><button id="deck-en" role="tab"><span>English</span><small>→ Russian</small></button></nav>
       <div class="study-heading"><h1 id="study-title">Today</h1><p><strong id="due-count">—</strong> <span id="due-label">left to study</span></p></div>
       <div id="mistake-bar" hidden><button id="leave-mistakes" class="text-button">Back to regular study</button></div>
+      <div id="active-set" class="active-set" hidden><span id="active-set-name"></span><button id="leave-set" class="text-button">Exit set</button></div>
       <div id="notice" role="status" aria-live="polite" hidden></div>
       <div class="toolbar"><label>Level<select id="level"><option value="0">All levels</option></select></label><label>Topic<select id="topic"><option value="">All topics</option></select></label></div>
       <section id="study" aria-label="Study card">
@@ -58,6 +59,7 @@
     </section>
     <section class="menu-group" aria-label="Library and data">
       <h3>Library &amp; data</h3>
+      <button id="open-library" class="menu-item">Search &amp; study sets</button>
       <button id="add-word" class="menu-item">Add a word</button>
       <button id="open-sync" class="menu-item">GitHub Sync</button>
       <button id="backup" class="menu-item">Export backup</button>
@@ -69,6 +71,22 @@
       <button id="help" class="menu-item">Help &amp; installation</button>
       <p id="connection" class="connection-status" role="status">Preparing offline access…</p>
     </section>
+  </dialog>
+  <dialog id="library-dialog" aria-labelledby="library-title">
+    <form method="dialog"><button class="dialog-close" aria-label="Close search and study sets">×</button></form>
+    <h2 id="library-title">Search &amp; study sets</h2>
+    <label>Course<select id="library-course"><option value="zh">Chinese → English</option><option value="en">English → Russian</option></select></label>
+    <label>Search words<input id="library-query" type="search" placeholder="Hanzi, pinyin or translation" autocomplete="off" spellcheck="false"></label>
+    <form id="create-set"><label>New set name<input id="set-name" maxlength="60" required placeholder="Travel"></label><button class="secondary">Create set</button></form>
+    <label>Study set<select id="library-set"></select></label>
+    <div id="set-actions" class="set-actions" hidden>
+      <button id="study-set" class="primary">Study this set</button><button id="delete-set" class="text-button">Delete set</button>
+      <label><input id="set-only" type="checkbox"> Show words in this set</label>
+    </div>
+    <p id="library-status" role="status"></p>
+    <p id="search-count" role="status"></p>
+    <ul id="search-results"></ul>
+    <button id="more-results" class="secondary wide" hidden>Show more results</button>
   </dialog>
   <dialog id="help-dialog"><form method="dialog"><button class="dialog-close" aria-label="Close help">×</button><span class="eyebrow">TAKE YOUR PRACTICE WITH YOU</span><h2>Install Hanzi Cards</h2><h3>Windows</h3><p>In Microsoft Edge, open the <strong>…</strong> menu and choose <strong>More tools → Apps → Install this site as an app</strong>.</p><button type="button" id="install-desktop" class="secondary" hidden>Install app</button><h3>iPhone</h3><p>In Safari, tap <strong>Share → Add to Home Screen</strong>. Keep <strong>Open as Web App</strong> enabled if shown, then tap <strong>Add</strong>.</p><p id="installed-status" role="status"></p><h3>Ready for offline study</h3><p>Wait for “Ready offline” before disconnecting. Use <strong>GitHub Sync</strong> online to merge reviews and custom cards across devices. Safari and the Home Screen app may use separate storage.</p><h3>About the courses</h3><p>Chinese uses HSK 3.0 (2021). English uses community CEFR levels. English translations and levels were AI-generated and may contain errors. <a href="./THIRD_PARTY_NOTICES.md" target="_blank" rel="noopener">View vocabulary sources</a>.</p><h3>Pronunciation</h3><p>Choose a voice and speed in Audio settings. Download the corresponding system voice for offline playback.</p><button class="primary wide">Got it</button></form></dialog>
   <dialog id="sync-dialog" aria-labelledby="sync-title">

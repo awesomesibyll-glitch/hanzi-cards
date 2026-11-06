@@ -34,6 +34,11 @@ The B2–C2 English examples are original sentences paired with Russian translat
 filters. It uses Poor ratings and incorrect typed answers saved with a grade.
 Practice does not record reviews, change due dates or consume the daily new-word cap.
 
+**Menu → Search & study sets** searches both courses by word, pinyin or
+translation. Create a named set, add existing words and choose **Study this
+set** to practise just those words with their usual review schedules. Sets are
+stored on the device and included in exported backups.
+
 Expanded words and all 2,970 Chinese stroke guides are bundled in compressed
 files (~1.5 MB total). This requires a browser with DecompressionStream support
 (modern Safari/iOS). See THIRD_PARTY_NOTICES.md for catalog licenses and sources.

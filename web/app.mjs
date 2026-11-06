@@ -1,8 +1,9 @@
 import { matchesStroke } from './modules/strokes.mjs';
-import { openLibrary, snapshot, saveReview, addWord, restoreBackup, validateBackup, mergeSync, syncPayload, STORAGE_KEY } from './storage.mjs';
+import { openLibrary, snapshot, saveReview, addWord, createSet, setMembership, deleteSet, restoreBackup, validateBackup, mergeSync, syncPayload, STORAGE_KEY } from './storage.mjs';
 import { playAudio, stopAudio, audioPreference, availableVoices, englishAccent, prepareWordAudio } from './audio.mjs';
 import { checkAnswer, clozeSentence, mistakeQueue, pinyinChoices, studyQueue, studySchedule } from './study.mjs';
 import { syncGitHub } from './sync.mjs';
+import { findWords, indexWords, wordsInSet } from './library.mjs';
 const $=id=>document.getElementById(id);
 const openPanel=id=>{$('menu-dialog').close();$(id).showModal();};
 for(const gesture of ['gesturestart','gesturechange'])document.addEventListener(gesture,event=>event.preventDefault(),{passive:false});
@@ -34,9 +35,13 @@ const dailyLimit=()=>[10,20,50].includes(Number(safePreference('hanzi-daily-limi
 const grades={Again:'Poor',Hard:'Fair',Good:'Good'};
 const DECKS={zh:{source:'zh-CN',target:'en-US',name:'Chinese → English',labels:['HSK 1','HSK 2','HSK 3','HSK 4','HSK 5','HSK 6','HSK 7–9']},en:{source:'en-US',target:'ru-RU',name:'English → Russian',labels:['A1 · Beginner','A2 · Elementary','B1 · Intermediate','B2 · Upper intermediate','C1 · Advanced','C2 · Proficiency']}};
 let deck=safePreference('hanzi-deck')==='en'?'en':'zh';
-const deckWords=()=>library.words.filter(w=>w.sourceLanguage===DECKS[deck].source&&w.targetLanguage===DECKS[deck].target);
+let activeSetId='',browseIndex=[],browseLimit=30;
+const activeSet=()=>library.sets.find(set=>set.id===activeSetId&&set.course===deck);
+const deckWords=(course=deck)=>library.words.filter(w=>w.sourceLanguage===DECKS[course].source&&w.targetLanguage===DECKS[course].target);
 function switchDeck(next){
-  if(busy||!library)return;deck=next;safePreference('hanzi-deck',deck);stopAudio();options();showNext();
+  if(busy||!library)return;
+  if(next!==deck)activeSetId='';
+  deck=next;safePreference('hanzi-deck',deck);stopAudio();options();showNext();
 }
 function options(){
   const config=DECKS[deck],words=deckWords();
@@ -60,7 +65,9 @@ function options(){
 function filteredCards(){
   const progress=new Map(library.progress.map(p=>[p.wordId,p]));
   const cloze=!mistakeSession&&studyMode()==='cloze';
-  return deckWords().filter(w=>(!Number($('level').value)||w.level===Number($('level').value))&&(!$('topic').value||w.topic===$('topic').value)&&(!cloze||clozeSentence(w))).map(w=>({...w,...progress.get(w.id)}));
+  const set=activeSet(),words=deckWords();
+  const selection=set?wordsInSet(words,set):words.filter(w=>(!Number($('level').value)||w.level===Number($('level').value))&&(!$('topic').value||w.topic===$('topic').value));
+  return selection.filter(word=>!cloze||clozeSentence(word)).map(w=>({...w,...progress.get(w.id)}));
 }
 function currentQueue(cards,now=Date.now()){
   return mistakeSession ? {queue:mistakeQueue(cards,library.reviews,completedMistakes)} : studyQueue(cards,library.reviews,dailyLimit(),now);
@@ -81,11 +88,15 @@ function showNext(){
   $('mistakes').textContent=mistakeSession?'Back to regular study':'Practise my mistakes';
   $('mistake-bar').hidden=!mistakeSession;
   $('study-title').textContent=mistakeSession?'My mistakes':'Today';
+  const set=activeSet();
+  $('active-set').hidden=!set;
+  $('active-set-name').textContent=set?.name??'';
+  document.querySelector('.toolbar').hidden=Boolean(set);
   $('due-label').textContent='left to study';
   $('card').hidden=!card;$('empty').hidden=!!card;$('writing').hidden=!card||deck!=='zh'||active;
   if(!card){
     const next=cards.filter(c=>c.due>now).sort((a,b)=>a.due-b.due)[0];
-    $('next-due').textContent=mistakeSession?(completedMistakes.size?'Practice complete for this selection.':'No mistakes in this selection yet. Cards appear here after a Poor rating or a graded incorrect answer.'):limited?'You reached today’s new-word limit. More new words will unlock tomorrow.':next?`Your next review is ${formatDue(next.due)}.`:cloze?'No gap-fill cards in this selection. Try All levels or switch modes in Study settings.':'No words match these filters. Choose another selection or add a word.';
+    $('next-due').textContent=mistakeSession?(completedMistakes.size?'Practice complete for this selection.':'No mistakes in this selection yet. Cards appear here after a Poor rating or a graded incorrect answer.'):limited?'You reached today’s new-word limit. More new words will unlock tomorrow.':next?`Your next review is ${formatDue(next.due)}.`:cloze?'No gap-fill cards in this selection. Switch modes in Study settings for more cards.':set?'This set has no cards ready. Manage it in Search & study sets.':'No words match these filters. Choose another selection or add a word.';
     return;
   }
   $('word').textContent=cloze?clozeSentence(card):active?card.translation:card.text;$('reading').textContent=card.reading;$('translation').textContent=card.translation;
@@ -224,6 +235,81 @@ $('refresh').onclick=()=>reload().then(showNext).catch(e=>notify(e.message));
 $('auto-audio').checked=safePreference('hanzi-auto-audio')==='true';
 $('auto-audio').onchange=()=>{safePreference('hanzi-auto-audio',String($('auto-audio').checked));if($('auto-audio').checked&&card&&(!recallMode()||revealed))speakWord();};
 $('open-menu').onclick=()=>$('menu-dialog').showModal();
+$('leave-set').onclick=()=>{if(!busy){activeSetId='';showNext();}};
+const browseCourse=()=>$('library-course').value;
+const chosenSet=()=>library.sets.find(set=>set.id===$('library-set').value&&set.course===browseCourse());
+function renderResults(){
+  const set=chosenSet(),members=new Set(set?.wordIds);
+  const matches=findWords(browseIndex,$('library-query').value).filter(word=>!$('set-only').checked||members.has(word.id));
+  $('set-actions').hidden=!set;
+  $('study-set').disabled=!set?.wordIds.length;
+  $('search-count').textContent=`${matches.length.toLocaleString()} ${matches.length===1?'word':'words'}`;
+  $('more-results').hidden=matches.length<=browseLimit;
+  $('search-results').replaceChildren(...matches.slice(0,browseLimit).map(word=>{
+    const row=document.createElement('li'),text=document.createElement('div'),title=document.createElement('strong'),detail=document.createElement('small');
+    title.textContent=word.text;title.lang=word.sourceLanguage;
+    detail.textContent=`${word.reading} · ${word.translation}`;
+    text.append(title,detail);row.append(text);
+    if(set){
+      const included=members.has(word.id),button=document.createElement('button');
+      button.className='secondary';button.textContent=included?'Remove':'Add';
+      button.setAttribute('aria-label',`${button.textContent} ${word.text} ${included?'from':'to'} ${set.name}`);
+      button.onclick=()=>changeSets(()=>setMembership(set.id,word.id,!included),set.id);
+      row.append(button);
+    }
+    return row;
+  }));
+}
+function refreshLibrary(selected=''){
+  browseIndex=indexWords(deckWords(browseCourse()));
+  const sets=library.sets.filter(set=>set.course===browseCourse());
+  $('library-set').replaceChildren(new Option(sets.length?'Choose a set':'No sets yet',''),...sets.map(set=>new Option(`${set.name} (${set.wordIds.length})`,set.id)));
+  $('library-set').value=sets.some(set=>set.id===selected)?selected:'';
+  if(!chosenSet())$('set-only').checked=false;
+  renderResults();
+}
+async function changeSets(change,selected=''){
+  if(busy)return;
+  busy=true;$('library-status').textContent='';
+  try{
+    const id=await change();
+    await reload();
+    refreshLibrary(id??selected);
+    if(activeSetId){
+      if(!activeSet())activeSetId='';
+      showNext();
+    }
+    return true;
+  }catch(error){$('library-status').textContent=error.message;}
+  finally{busy=false;}
+}
+$('open-library').onclick=()=>{
+  if(!library||busy)return;
+  $('library-course').value=deck;$('library-query').value='';$('set-only').checked=false;
+  $('library-status').textContent='';browseLimit=30;
+  refreshLibrary(activeSetId);openPanel('library-dialog');
+};
+$('library-course').onchange=()=>{browseLimit=30;$('set-only').checked=false;refreshLibrary();};
+$('library-query').oninput=$('set-only').onchange=()=>{browseLimit=30;renderResults();};
+$('library-set').onchange=()=>{browseLimit=30;$('set-only').checked=false;renderResults();};
+$('more-results').onclick=()=>{browseLimit+=30;renderResults();};
+$('create-set').onsubmit=async event=>{
+  event.preventDefault();
+  const saved=await changeSets(()=>createSet($('set-name').value,browseCourse()));
+  if(saved)$('set-name').value='';
+};
+$('delete-set').onclick=()=>{
+  const set=chosenSet();
+  if(set&&confirm(`Delete “${set.name}”? Its cards and review history will stay in the library.`))void changeSets(()=>deleteSet(set.id));
+};
+$('study-set').onclick=()=>{
+  const set=chosenSet();
+  if(busy||!set?.wordIds.length)return;
+  $('library-dialog').close();
+  deck=set.course;safePreference('hanzi-deck',deck);activeSetId=set.id;
+  mistakeSession=false;completedMistakes.clear();
+  options();showNext();
+};
 $('help').onclick=()=>{$('installed-status').textContent=(matchMedia('(display-mode: standalone)').matches||navigator.standalone)?'You are already using the installed web app.':'';openPanel('help-dialog');};
 const wordForm=$('word-form');
 function renderPinyin(){
@@ -263,7 +349,7 @@ $('restore').onchange=async e=>{
   try{
     if(file.size>20*1024*1024)throw new Error('The backup is too large (20 MB maximum).');
     const data=validateBackup(JSON.parse(await file.text()));
-    if(!confirm(`Replace the library and progress on this device with ${data.words.length} words from this backup? Export your current backup first if needed.`))return;
+    if(!confirm(`Replace the library, study sets and progress on this device with this backup of ${data.words.length} words? Export your current backup first if needed.`))return;
     await restoreBackup(data);await reload();options();showNext();notify('Backup restored.');
   }catch(e){notify(`Backup was not restored: ${e.message}`);}finally{busy=false;e.target.value='';}
 };
@@ -338,7 +424,11 @@ $('sync-form').onsubmit = async event => {
 };
 window.addEventListener('library-error',e=>notify(e.detail));
 window.addEventListener('storage',event=>{
-  if(library&&!busy&&[STORAGE_KEY,'hanzi-study-mode','hanzi-daily-limit'].includes(event.key))void reload().then(()=>{options();showNext();}).catch(error=>notify(error.message));
+  if(library&&!busy&&[STORAGE_KEY,'hanzi-study-mode','hanzi-daily-limit'].includes(event.key))void reload().then(()=>{
+    if(activeSetId&&!activeSet())activeSetId='';
+    options();showNext();
+    if($('library-dialog').open)refreshLibrary($('library-set').value);
+  }).catch(error=>notify(error.message));
 });
 document.addEventListener('visibilitychange',()=>{if(document.hidden){stopAnimation();stopAudio();}else if(library&&!busy)reload().then(()=>{if(!card)showNext();}).catch(e=>notify(e.message));});
 setInterval(()=>{if(library&&!busy&&!document.hidden){renderStats();if(!card)showNext();}},15000);

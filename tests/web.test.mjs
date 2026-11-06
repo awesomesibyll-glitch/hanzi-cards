@@ -5,7 +5,8 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import { gunzipSync } from 'node:zlib';
-import { validateBackup, mergeSyncRecords, syncPayload, openLibrary, snapshot, saveReview, addWord } from '../docs/storage.mjs';
+import { validateBackup, mergeSyncRecords, syncPayload, openLibrary, snapshot, saveReview, addWord, createSet, setMembership, deleteSet, restoreBackup } from '../docs/storage.mjs';
+import { findWords, indexWords, wordsInSet } from '../docs/library.mjs';
 import { syncGitHub } from '../docs/sync.mjs';
 import { withContext, pinyinChoices, checkAnswer, clozeSentence, mistakeQueue, studyQueue, studySchedule } from '../docs/study.mjs';
 import { advancedExamples } from '../docs/advanced-examples.mjs';
@@ -35,7 +36,7 @@ test('service worker precaches every required file and serves cached assets offl
 });
 test('manifest uses project-relative URLs and includes iPhone installation metadata',()=>{
   const manifest=JSON.parse(readFileSync(resolve(root,'docs/manifest.webmanifest'),'utf8'));
-  assert.equal(manifest.start_url,'./today.html');assert.equal(manifest.id,'./');assert.equal(manifest.scope,'./');assert.equal(manifest.display,'standalone');
+  assert.equal(manifest.start_url,'./library.html');assert.equal(manifest.id,'./');assert.equal(manifest.scope,'./');assert.equal(manifest.display,'standalone');
   for(const icon of manifest.icons)assert.ok(existsSync(resolve(root,'docs',icon.src)));
   const html=readFileSync(resolve(root,'docs/index.html'),'utf8');assert.ok(html.includes('apple-touch-icon'));assert.ok(html.includes('viewport-fit=cover'));
 });
@@ -72,6 +73,19 @@ test('mistake practice includes Poor and graded incorrect answers, even for card
   assert.deepEqual(mistakeQueue(cards,reviews,new Set([first])).map(card=>card.id),[second]);
   assert.deepEqual(mistakeQueue(cards.slice(2),reviews,new Set()),[]);
   assert.equal(reviews.length,4);
+});
+
+test('library search matches Hanzi, unaccented and numbered pinyin, and translations',()=>{
+  const sample=[
+    {id:'first',text:'您好',reading:'nín hǎo',translation:'hello',sourceLanguage:'zh-CN'},
+    {id:'exact',text:'你好',reading:'nǐ hǎo',translation:'hello; hi',sourceLanguage:'zh-CN'},
+    {id:'en',text:'walk',reading:'wɔːk',translation:'ходьба; идти',sourceLanguage:'en-US'}
+  ];
+  const index=indexWords(sample);
+  for(const query of ['你好','nihao','ni3 hao3'])assert.equal(findWords(index,query)[0].id,'exact');
+  assert.equal(findWords(index,'hello')[0].id,'first');
+  assert.equal(findWords(index,'ИДТИ')[0].id,'en');
+  assert.deepEqual(wordsInSet(sample,{wordIds:['exact']}).map(word=>word.id),['exact']);
 });
 
 test('GitHub sync encrypts and merges reviews and custom cards from two devices', async t => {
@@ -172,4 +186,16 @@ test('daily limit applies to first attempts only and the study state survives re
   assert.equal(reopened.progress[0].status,'learning');
   assert.equal(reopened.progress.find(p=>p.wordId===oldCard.id).due,100);
   assert.ok(reopened.words.some(word=>word.id==='custom-persistence'));
+  const setId=await createSet('Travel','zh');
+  await setMembership(setId,bank[0].id,true);
+  await setMembership(setId,bank[0].id,true);
+  await setMembership(setId,'custom-persistence',true);
+  const backup=await snapshot();
+  assert.deepEqual(backup.sets[0].wordIds,[bank[0].id,'custom-persistence']);
+  await deleteSet(setId);
+  assert.deepEqual((await snapshot()).sets,[]);
+  await restoreBackup(backup);
+  await setMembership(setId,bank[0].id,false);
+  assert.deepEqual((await snapshot()).sets[0].wordIds,['custom-persistence']);
+  assert.equal((await snapshot()).reviews.length,1);
 });

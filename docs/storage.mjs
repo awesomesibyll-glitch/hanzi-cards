@@ -45,7 +45,7 @@ export async function snapshot() {
     const item=saved.get(w.id)??freshProgress(w.id);
     return {...item,status:!item.due?'new':item.repetitions?'review':'learning'};
   });
-  return {version:1,exportedAt:new Date().toISOString(),words,progress,reviews:state.reviews,attribution:[{source:'Complete HSK Vocabulary / CC-CEDICT',url:'https://github.com/drkameleon/complete-hsk-vocabulary',license:'CC BY-SA 4.0 (adapted dictionary fields)'},{source:'Vocab Bloom Hub',url:'https://huggingface.co/datasets/Fristail27/vocab-bloom-hub-en',license:'CC BY 4.0',notice:'AI-generated, not human-verified; translations and CEFR levels may contain errors.'}]};
+  return {version:1,exportedAt:new Date().toISOString(),words,progress,reviews:state.reviews,sets:state.sets??[],attribution:[{source:'Complete HSK Vocabulary / CC-CEDICT',url:'https://github.com/drkameleon/complete-hsk-vocabulary',license:'CC BY-SA 4.0 (adapted dictionary fields)'},{source:'Vocab Bloom Hub',url:'https://huggingface.co/datasets/Fristail27/vocab-bloom-hub-en',license:'CC BY 4.0',notice:'AI-generated, not human-verified; translations and CEFR levels may contain errors.'}]};
 }
 export async function saveReview(card,rating,now=Date.now(),limit=10,mistake=false) {
   if(!RATINGS.includes(rating))throw new Error('Unknown review rating');
@@ -66,6 +66,53 @@ export async function addWord(word) {
   if (!word.sentence?.trim() || !word.sentenceTranslation?.trim()) throw new Error('Enter a sentence and its translation.');
   await update(state=>{state.words.push(word);});
 }
+const courseLanguages={zh:['zh-CN','en-US'],en:['en-US','ru-RU']};
+function inCourse(word,course){
+  const languages=courseLanguages[course];
+  return languages&&word?.sourceLanguage===languages[0]&&word.targetLanguage===languages[1];
+}
+function validSetName(name){return typeof name==='string'&&name.trim().length>0&&name.length<=60;}
+
+export async function createSet(name,course){
+  if(!validSetName(name)||!Object.hasOwn(courseLanguages,course))throw new Error('Enter a set name of 1–60 characters.');
+  const set={id:crypto.randomUUID(),name:name.trim(),course,wordIds:[]};
+  await update(state=>{
+    const sets=state.sets??=[];
+    if(sets.length>=100)throw new Error('You can save up to 100 sets.');
+    if(sets.some(item=>item.course===course&&item.name.toLowerCase()===set.name.toLowerCase()))throw new Error('A set already has this name.');
+    sets.push(set);
+  });
+  return set.id;
+}
+
+export async function setMembership(setId,wordId,include){
+  await update(state=>{
+    const set=state.sets?.find(item=>item.id===setId);
+    const word=catalog.get(wordId)??state.words.find(item=>item.id===wordId);
+    if(!set||!inCourse(word,set.course))throw new Error('This word or set is no longer available.');
+    const members=new Set(set.wordIds);
+    if(include)members.add(wordId);else members.delete(wordId);
+    set.wordIds=[...members];
+  });
+}
+
+export async function deleteSet(setId){
+  await update(state=>{state.sets=(state.sets??[]).filter(set=>set.id!==setId);});
+}
+
+function validateSets(sets,words){
+  if(!Array.isArray(sets)||sets.length>100)throw new Error('Invalid study sets.');
+  const wordsById=new Map(words.map(word=>[word.id,word]));
+  const ids=new Set();
+  for(const set of sets){
+    if(!set||typeof set.id!=='string'||!set.id||set.id.length>60||ids.has(set.id)||
+        !validSetName(set.name)||!Object.hasOwn(courseLanguages,set.course)||!Array.isArray(set.wordIds)||
+        set.wordIds.length>words.length||new Set(set.wordIds).size!==set.wordIds.length||
+        !set.wordIds.every(id=>inCourse(wordsById.get(id),set.course)))throw new Error('Invalid study set.');
+    ids.add(set.id);
+  }
+}
+
 function validateWords(words) {
   if(!Array.isArray(words)||words.length>30000)throw new Error('Backup must contain at most 30,000 words.');
   const ids=new Set();
@@ -92,6 +139,7 @@ export function validateBackup(data){
     seen.add(p.wordId);
   }
   for(const r of data.reviews)if(!r||!ids.has(r.wordId)||!RATINGS.includes(r.rating)||![r.reviewedAt,r.nextDue].every(n=>Number.isFinite(n)&&n>=0&&n<=8.64e15))throw new Error('Invalid review history.');
+  if(data.sets!==undefined)validateSets(data.sets,data.words);
   return data;
 }
 export async function restoreBackup(data) {
@@ -99,7 +147,8 @@ export async function restoreBackup(data) {
   await lock(()=>write({
     words:data.words.filter(w=>!catalog.has(w.id)).map(withContext),
     progress:data.progress.filter(p=>p.due),
-    reviews:data.reviews
+    reviews:data.reviews,
+    sets:data.sets??[]
   }));
 }
 
