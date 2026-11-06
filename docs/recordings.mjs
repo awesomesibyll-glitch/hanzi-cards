@@ -29,35 +29,63 @@ function plain(html){
   return template.content.textContent.trim();
 }
 
-async function mandarinRecording(text,reading,signal){
-  if(!/^[\p{Script=Han}]+$/u.test(text)||!reading)return null;
-  const pinyin=reading.normalize('NFC').toLowerCase().replace(/[\s'’]/g,'');
-  if(!/^[\p{Script=Latin}\p{M}]+$/u.test(pinyin))return null;
+export function commonsTitles(text,language,reading=''){
+  if(language==='zh-CN'){
+    if(!/^[\p{Script=Han}]+$/u.test(text)||text.length>32)return [];
+    const pinyin=reading.normalize('NFC').toLowerCase().replace(/[\s'’]/g,'');
+    const byReading=/^[\p{Script=Latin}\p{M}]+$/u.test(pinyin)?[`Zh-${pinyin}.ogg`,`Cmn-${pinyin}.ogg`]:[];
+    if([...text].length===1)return byReading;
+    return [...byReading,`LL-Q9192 (cmn)-CanonNi-${text}.wav`,`Cmn-${text}.ogg`,`Zh-${text}.ogg`];
+  }
+  const accent=accents[language];
+  if(!accent||!/^[a-z]+(?:[ '-][a-z]+)*$/i.test(text)||text.length>45)return [];
+  const word=text.toLowerCase();
+  const capitalized=word[0].toUpperCase()+word.slice(1);
+  const prefixes=language==='en-GB'?['En-uk','En-gb']:['En-us'];
+  return [...new Set(prefixes.flatMap(prefix=>[word,capitalized].map(form=>`${prefix}-${form}.ogg`)))];
+}
+
+async function commonsRecording(text,language,reading,signal){
+  const titles=commonsTitles(text,language,reading);
+  if(!titles.length)return null;
   const query=new URLSearchParams({action:'query',format:'json',origin:'*',redirects:'1',prop:'imageinfo',
     iiprop:'url|extmetadata',iiextmetadatafilter:'ImageDescription|Artist|LicenseUrl',
-    titles:`File:Zh-${pinyin}.ogg|File:Cmn-${pinyin}.ogg`});
+    titles:titles.map(title=>'File:'+title).join('|')});
   const response=await fetch('https://commons.wikimedia.org/w/api.php?'+query,{signal,credentials:'omit'});
   if(!response.ok)throw new Error('Recording lookup failed.');
-  const pages=Object.values((await response.json()).query?.pages??{});
-  for(const page of pages){
+  const data=(await response.json()).query;
+  const redirects=new Map((data?.redirects??[]).map(({from,to})=>[from,to]));
+  const byTitle=new Map(Object.values(data?.pages??{}).map(page=>[page.title,page]));
+  for(const name of titles){
+    const title='File:'+name;
+    const page=byTitle.get(redirects.get(title)??title);
+    if(!page)continue;
     const info=page.imageinfo?.[0],metadata=info?.extmetadata;
     const source=info?.descriptionurl,license=metadata?.LicenseUrl?.value?.replace(/^http:/,'https:');
     const description=plain(metadata?.ImageDescription?.value);
     if(!info?.url?.startsWith('https://upload.wikimedia.org/')||!source?.startsWith('https://commons.wikimedia.org/')||
-        !license?.startsWith('https://creativecommons.org/')||
-        !/(mandarin|standard chinese|in chinese)/i.test(description)||/cantonese|hokkien|shanghainese/i.test(description))continue;
+        !license?.startsWith('https://creativecommons.org/'))continue;
+    if(language==='zh-CN'){
+      const linguaLibre=page.title===`File:LL-Q9192 (cmn)-CanonNi-${text}.wav`;
+      if(!linguaLibre&&(!/(mandarin|standard chinese|in chinese)/i.test(description)||/cantonese|hokkien|shanghainese/i.test(description)))continue;
+    }else if(!(language==='en-GB'?/^File:En-(uk|gb)-/i:/^File:En-us-/i).test(page.title))continue;
     return {url:info.url,source,license,artist:plain(metadata?.Artist?.value).slice(0,150)};
   }
   return null;
 }
 
 async function findRecording(text,language,reading,signal){
-  if(language==='zh-CN')return mandarinRecording(text,reading,signal);
-  if(!accents[language]||!/^[a-z]+(?:[-'][a-z]+)?$/i.test(text)||text.length>40)return null;
-  const response=await fetch('https://api.dictionaryapi.dev/api/v2/entries/en/'+encodeURIComponent(text.toLowerCase()),{signal,credentials:'omit'});
-  if(response.status===404)return null;
-  if(!response.ok)throw new Error('Recording lookup failed.');
-  return englishRecording(await response.json(),language);
+  if(accents[language]&&/^[a-z]+(?:[-'][a-z]+)?$/i.test(text)&&text.length<=40){
+    try{
+      const response=await fetch('https://api.dictionaryapi.dev/api/v2/entries/en/'+encodeURIComponent(text.toLowerCase()),
+        {signal:AbortSignal.timeout(2300),credentials:'omit'});
+      if(response.ok){
+        const recording=englishRecording(await response.json(),language);
+        if(recording)return recording;
+      }
+    }catch{}
+  }
+  return commonsRecording(text,language,reading,signal);
 }
 
 export function loadRecording(text,language,reading){
@@ -71,7 +99,7 @@ export function loadRecording(text,language,reading){
       const cache=await globalThis.caches?.open(cacheName).catch(()=>null);
       let response=await cache?.match(key);
       if(!response&&navigator.onLine){
-        const signal=AbortSignal.timeout(4500);
+        const signal=AbortSignal.timeout(7500);
         const clip=await findRecording(text,language,reading,signal);
         if(!clip){missing.add(identity);return null;}
         const download=await fetch(clip.url,{signal,credentials:'omit'});

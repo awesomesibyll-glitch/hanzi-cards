@@ -1,4 +1,4 @@
-import { studyQueue, studySchedule, withContext } from './study-v8.mjs';
+import { studyQueue, studySchedule, withContext } from './study-v12.mjs';
 import { importWordKey } from './import-list.mjs';
 export const RATINGS = ['Again', 'Hard', 'Good', 'Easy'];
 export const STORAGE_KEY = 'hanzi-study-v4';

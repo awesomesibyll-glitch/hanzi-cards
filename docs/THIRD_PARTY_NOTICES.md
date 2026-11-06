@@ -52,8 +52,9 @@ licenses/. Commit that directory when publishing generated assets. Preserve the
 attribution and license for any additional imported vocabulary pack. HSK is a
 classification label, not a claim of affiliation or certification.
 
-Optional word audio is fetched on demand. Mandarin recordings come from
-Wikimedia Commons. Accent-labelled English recordings are found via Free
-Dictionary API and attributed to their Wikimedia Commons file pages. The
+Optional word audio is fetched for the current word. Mandarin recordings come
+from Wikimedia Commons, including Lingua Libre contributions. Accent-labelled
+English recordings are found via Free Dictionary API and direct Wikimedia
+Commons lookup. The
 app displays the source and Creative Commons license for the recording
 being played. The downloaded audio files are unmodified.

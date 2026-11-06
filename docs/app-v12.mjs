@@ -1,7 +1,7 @@
 import { matchesStroke } from './modules/strokes.mjs';
-import { openLibrary, snapshot, saveReview, addWord, importWords, createSet, setMembership, deleteSet, restoreBackup, validateBackup, mergeSync, syncPayload, STORAGE_KEY } from './storage-v11.mjs';
-import { playAudio, stopAudio, audioPreference, availableVoices, englishAccent, prepareWordAudio } from './audio-v8.mjs';
-import { checkAnswer, clozeSentence, mistakeQueue, pinyinChoices, studyQueue, studySchedule } from './study-v8.mjs';
+import { openLibrary, snapshot, saveReview, addWord, importWords, createSet, setMembership, deleteSet, restoreBackup, validateBackup, mergeSync, syncPayload, STORAGE_KEY } from './storage-v12.mjs';
+import { playAudio, stopAudio, audioPreference, availableVoices, englishAccent, prepareWordAudio } from './audio-v12.mjs';
+import { checkAnswer, checkDictation, clozeSentence, mistakeQueue, pinyinChoices, studyQueue, studySchedule } from './study-v12.mjs';
 import { syncGitHub } from './sync.mjs';
 import { findWords, indexWords, wordsInSet } from './library.mjs';
 import { previewImport } from './import-list.mjs';
@@ -18,10 +18,12 @@ const safePreference=(name,value)=>{try{if(value===undefined)return localStorage
 const formatDue=due=>new Date(due).toLocaleString(undefined,{dateStyle:'medium',timeStyle:'short'});
 const audioStatus=message=>{$('card-audio-status').textContent=message;};
 const speak=(text,language)=>playAudio(text,language,audioStatus,{credit:recordingCredit});
+let currentCredit=null;
 function recordingCredit(recording){
+  currentCredit=recording;
   const note=$('recording-credit');
-  note.replaceChildren();note.hidden=!recording;
-  if(!recording)return;
+  note.replaceChildren();note.hidden=!recording||Boolean(dictationMode()&&!revealed);
+  if(note.hidden)return;
   const link=(text,url)=>{const a=document.createElement('a');a.textContent=text;a.href=url;a.target='_blank';a.rel='noopener noreferrer';return a;};
   note.append('Human recording · ',link(recording.artist||'Recording and contributor',recording.source),' · ',link('Creative Commons license',recording.license));
 }
@@ -31,7 +33,12 @@ function speakWord(notifyPlayback=audioStatus){
 const studyMode=()=>safePreference('hanzi-study-mode')||'classic';
 let mistakeSession=false, incorrectAnswer=false;
 const completedMistakes=new Set();
-const recallMode=()=>mistakeSession||['recall','cloze'].includes(studyMode());
+function dictationMode(){
+  if(mistakeSession)return '';
+  const mode=studyMode();
+  return mode.startsWith('listen-')?(mode==='listen-tones'&&deck!=='zh'?'listen-word':mode):'';
+}
+const recallMode=()=>mistakeSession||Boolean(dictationMode())||['recall','cloze'].includes(studyMode());
 const dailyLimit=()=>[10,20,50].includes(Number(safePreference('hanzi-daily-limit'))) ? Number(safePreference('hanzi-daily-limit')) : 10;
 const grades={Again:'Poor',Hard:'Fair',Good:'Good'};
 const DECKS={zh:{source:'zh-CN',target:'en-US',name:'Chinese → English',labels:['HSK 1','HSK 2','HSK 3','HSK 4','HSK 5','HSK 6','HSK 7–9']},en:{source:'en-US',target:'ru-RU',name:'English → Russian',labels:['A1 · Beginner','A2 · Elementary','B1 · Intermediate','B2 · Upper intermediate','C1 · Advanced','C2 · Proficiency']}};
@@ -81,7 +88,7 @@ function renderStats(remaining=currentQueue(filteredCards()).queue.length){
 }
 function showNext(){
   stopAnimation();clearInk();stopAudio();recordingCredit(null);audioStatus('');
-  const cards=filteredCards(),now=Date.now(),active=recallMode(),cloze=!mistakeSession&&studyMode()==='cloze';
+  const cards=filteredCards(),now=Date.now(),active=recallMode(),cloze=!mistakeSession&&studyMode()==='cloze',dictation=dictationMode();
   const {queue,limited}=currentQueue(cards,now);
   card=queue[0];
   revealed=false;incorrectAnswer=false;renderStats(queue.length);
@@ -100,20 +107,26 @@ function showNext(){
     $('next-due').textContent=mistakeSession?(completedMistakes.size?'Practice complete for this selection.':'No mistakes in this selection yet. Cards appear here after a Poor rating or a graded incorrect answer.'):limited?'You reached today’s new-word limit. More new words will unlock tomorrow.':next?`Your next review is ${formatDue(next.due)}.`:cloze?'No gap-fill cards in this selection. Switch modes in Study settings for more cards.':set?'This set has no cards ready. Manage it in Search & study sets.':'No words match these filters. Choose another selection or add a word.';
     return;
   }
-  $('word').textContent=cloze?clozeSentence(card):active?card.translation:card.text;$('reading').textContent=card.reading;$('translation').textContent=card.translation;
+  $('word').textContent=dictation?'':cloze?clozeSentence(card):active?card.translation:card.text;
+  $('word').hidden=Boolean(dictation);
+  $('reading').textContent=card.reading;$('translation').textContent=card.translation;
   $('word').style.fontSize=deck==='en'?(card.text.length>14?'32px':'46px'):(Array.from(card.text).length>4?'46px':'');$('word').lang=card.sourceLanguage;$('translation').lang=card.targetLanguage;$('reading').lang=deck==='zh'?'zh-Latn':'en';$('play-zh').setAttribute('aria-label',`Play ${deck==='zh'?'Chinese':'English'} pronunciation`);$('play-en').textContent=`Listen in ${deck==='zh'?'English':'Russian'} ↗`;
   $('word').classList.toggle('recall-prompt',active);
   $('word').lang=active&&!cloze?card.targetLanguage:card.sourceLanguage;
-  $('play-zh').hidden=active;
+  $('play-zh').hidden=active&&!dictation;
+  if(dictation)$('play-zh').setAttribute('aria-label',dictation==='listen-sentence'?'Play dictation sentence':'Play dictation word');
   $('sentence').textContent=card.sentence;$('sentence').lang=card.sourceLanguage;
   $('sentence-translation').textContent=card.sentenceTranslation;$('sentence-translation').lang=card.targetLanguage;
   $('context-label').textContent=card.contextKind==='practice'?'PRACTICE SENTENCE':'IN CONTEXT';
   $('card-category').textContent=DECKS[deck].labels[card.level-1]?.split(' · ')[0]??card.level;
   $('card-status').textContent=mistakeSession?'MISTAKE PRACTICE':card.due===0?'NEW WORD':'REVIEW';
   $('answer').hidden=true;$('ratings').hidden=true;$('reveal').hidden=active;$('card-prompt').hidden=!active;
-  $('card-prompt').textContent=cloze?(deck==='zh'?'Fill the gap with Hanzi or pinyin.':'Type the missing English word.'):active?(deck==='zh'?'Type the Hanzi or pinyin for this meaning.':'Type the English word for this meaning.'):'Take a moment. What does this word mean?';
+  $('card-prompt').textContent=dictation==='listen-tones'?'Listen and type pinyin with tone marks or numbers, such as ni3.':
+    dictation==='listen-sentence'?(deck==='zh'?'Listen and type the whole sentence in Hanzi.':'Listen and type the whole sentence.'):
+    dictation?(deck==='zh'?'Listen and type the word in Hanzi or pinyin.':'Listen and type the English word.'):
+    cloze?(deck==='zh'?'Fill the gap with Hanzi or pinyin.':'Type the missing English word.'):active?(deck==='zh'?'Type the Hanzi or pinyin for this meaning.':'Type the English word for this meaning.'):'';
   $('recall-form').hidden=!active;$('recall-form').reset();$('recall-feedback').hidden=true;
-  $('skip-practice').hidden=!mistakeSession;$('next-practice').hidden=true;
+  $('skip-practice').hidden=!mistakeSession&&!dictation;$('next-practice').hidden=true;
   const holder=document.querySelector('.rating-grid');holder.replaceChildren();
   for(const [rating,label] of Object.entries(grades)){
     const button=document.createElement('button');const next=studySchedule(card,rating,now);
@@ -125,9 +138,9 @@ function showNext(){
     const b=document.createElement('button');b.textContent=character;b.lang='zh-CN';b.onclick=()=>selectCharacter(character);$('characters').append(b);
   }
   if(deck==='zh')selectCharacter($('characters').firstChild?.textContent??'');
-  if(!active){
-    prepareWordAudio(card.text,card.sourceLanguage,card.reading);
-    if($('auto-audio').checked)speakWord();
+  if(!active||dictation){
+    if(dictation!=='listen-sentence')prepareWordAudio(card.text,card.sourceLanguage,card.reading);
+    if(!dictation&&$('auto-audio').checked)speakWord();
   }
 }
 async function reload(){library=await snapshot();renderStats();}
@@ -143,6 +156,9 @@ function reveal(checked=false){
   revealed=true;$('answer').hidden=false;$('ratings').hidden=mistakeSession;$('reveal').hidden=true;$('card-prompt').hidden=true;
   $('skip-practice').hidden=true;$('next-practice').hidden=!mistakeSession;
   $('recall-form').hidden=true;$('play-zh').hidden=false;
+  $('word').hidden=false;
+  $('play-zh').setAttribute('aria-label',`Play ${deck==='zh'?'Chinese':'English'} pronunciation`);
+  recordingCredit(currentCredit);
   $('word').textContent=card.text;$('word').lang=card.sourceLanguage;$('word').classList.remove('recall-prompt');
   prepareWordAudio(card.text,card.sourceLanguage,card.reading);
   $('writing').hidden=deck!=='zh';
@@ -188,13 +204,18 @@ $('animate').onclick=()=>{
 $('clear').onclick=()=>selectCharacter(currentCharacter);
 $('level').onchange=$('topic').onchange=()=>{if(!busy){safePreference('hanzi-level-'+deck,$('level').value);safePreference('hanzi-topic-'+deck,$('topic').value);showNext();}};
 $('deck-zh').onclick=()=>switchDeck('zh');$('deck-en').onclick=()=>switchDeck('en');
-$('reveal').onclick=reveal;$('play-zh').onclick=()=>speakWord();$('play-en').onclick=()=>card&&speak(card.translation,card.targetLanguage);
+$('reveal').onclick=reveal;$('play-zh').onclick=()=>{
+  if(!card)return;
+  if(!revealed&&dictationMode()==='listen-sentence')speak(card.sentence,card.sourceLanguage);
+  else speakWord();
+};$('play-en').onclick=()=>card&&speak(card.translation,card.targetLanguage);
 $('play-sentence').onclick=()=>card&&speak(card.sentence,card.sourceLanguage);
 $('recall-form').onsubmit=event=>{
   event.preventDefault();
   const input=$('recall-input').value.trim();
   if (!card||busy||revealed||!input) return;
-  const correct=checkAnswer(card,input);
+  const mode=dictationMode();
+  const correct=mode?checkDictation(card,input,mode):checkAnswer(card,input);
   incorrectAnswer=!correct;
   const feedback=$('recall-feedback');
   feedback.dataset.correct=String(correct);
@@ -210,7 +231,7 @@ $('mistakes').onclick=()=>{
   showNext();
 };
 $('leave-mistakes').onclick=$('mistakes').onclick;
-$('skip-practice').onclick=()=>{if(mistakeSession)reveal(true);};
+$('skip-practice').onclick=()=>{if(mistakeSession||dictationMode())reveal(true);};
 $('next-practice').onclick=()=>{
   if(!mistakeSession||!card||!revealed)return;
   completedMistakes.add(card.id);

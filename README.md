@@ -19,6 +19,12 @@ recordings can replay offline. Web Speech handles sentences and words without
 recordings, preferring Enhanced and Premium on-device voices when available.
 Choose **System voices only** to keep pronunciation entirely on the device.
 
+**Study settings** includes **Dictation · word**, **Dictation · sentence**,
+and **Dictation · pinyin tones**. The answer stays hidden until checked.
+The tones mode accepts tone marks or numbered pinyin. The dictation uses
+the same scheduling as regular reviews. Sentence playback uses a system
+voice; word playback uses a matching human recording where available.
+
 **Study settings** switches between classic cards, typing the answer and
 **Fill the gap**. Gap-fill cards use examples containing the exact target word
 and share the same review schedule as the other modes. In

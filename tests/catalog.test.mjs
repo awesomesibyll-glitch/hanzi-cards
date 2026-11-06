@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { playAudio, voiceScore } from '../web/audio.mjs';
-import { englishRecording, isAudioClip } from '../web/recordings.mjs';
+import { commonsTitles, englishRecording, isAudioClip } from '../web/recordings.mjs';
 const catalog=JSON.parse(readFileSync(new URL('../web/data/catalog.json',import.meta.url),'utf8'));
 const load=name=>JSON.parse(gunzipSync(Buffer.concat(catalog.packs[name].map(file=>readFileSync(new URL('../web/data/'+file,import.meta.url))))).toString('utf8'));
 test('both courses have unique IDs, translations, levels and complete Chinese stroke coverage',()=>{
@@ -35,6 +35,13 @@ test('UK and US pronunciation never substitute recordings from another or unknow
 test('accepts Wikimedia’s application/ogg only when it is an Ogg file',async()=>{
   assert.equal(await isAudioClip(new Blob(['OggS...'],{type:'application/ogg'})),true);
   assert.equal(await isAudioClip(new Blob(['<html>'],{type:'application/ogg'})),false);
+});
+test('expanded Commons lookup uses matching Mandarin and regional English filenames',()=>{
+  assert.ok(commonsTitles('拼音','zh-CN','pīn yīn').includes('LL-Q9192 (cmn)-CanonNi-拼音.wav'));
+  assert.deepEqual(commonsTitles('行','zh-CN','háng'),['Zh-háng.ogg','Cmn-háng.ogg']);
+  assert.ok(commonsTitles('book','en-GB').includes('En-uk-book.ogg'));
+  assert.ok(commonsTitles('book','en-GB').every(title=>!title.startsWith('En-us-')));
+  assert.deepEqual(commonsTitles('use','en-US'),['En-us-use.ogg','En-us-Use.ogg']);
 });
 test('mobile playback starts fallback speech during the tap while the recording is pending',async t=>{
   const descriptor=name=>Object.getOwnPropertyDescriptor(globalThis,name);

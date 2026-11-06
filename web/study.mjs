@@ -66,6 +66,33 @@ export function checkAnswer(word, input) {
   return answer === normalize(word.text) || (word.sourceLanguage === 'zh-CN' && pinyinKey(answer) === pinyinKey(word.reading));
 }
 
+function toneSpelling(value){
+  const text=value.toLowerCase().normalize('NFC').replace(/u:|v/g,'ü').replace(/[\s'’\-]+/g,'');
+  if(!/[0-5]/.test(text))return text;
+  if(!/^(?:[a-zü]+[0-5])+$/u.test(text))return '';
+  const marks=['','\u0304','\u0301','\u030c','\u0300',''];
+  return text.replace(/([a-zü]+)([0-5])/gu,(_,syllable,tone)=>{
+    const index=[syllable.indexOf('a'),syllable.indexOf('e'),syllable.indexOf('ou'),syllable.search(/[iouü](?!.*[iouü])/u)].find(i=>i>=0);
+    if(index===undefined)return syllable+marks[tone];
+    return syllable.slice(0,index+1)+marks[tone]+syllable.slice(index+1);
+  }).normalize('NFC');
+}
+
+export function checkDictation(word,input,mode){
+  if(mode==='listen-tones'){
+    const expected=toneSpelling(word.reading);
+    return Boolean(expected)&&toneSpelling(input)===expected;
+  }
+  if(mode==='listen-sentence'){
+    const zh=word.sourceLanguage==='zh-CN';
+    const normalize=value=>value.normalize('NFKC').toLowerCase().replace(/[‘’]/g,"'")
+      .replace(/[^\p{L}\p{N}'\s]+/gu,zh?'':' ').replace(/\s+/g,zh?'':' ').trim();
+    const answer=normalize(input);
+    return Boolean(answer)&&answer===normalize(word.sentence);
+  }
+  return checkAnswer(word,input);
+}
+
 export function clozeSentence(word) {
   if (word.contextKind==='practice' || !word.sentence || !word.text) return '';
   const literal=word.text.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');

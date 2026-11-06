@@ -9,7 +9,7 @@ import { validateBackup, mergeSyncRecords, syncPayload, openLibrary, snapshot, s
 import { findWords, indexWords, wordsInSet } from '../docs/library.mjs';
 import { previewImport } from '../docs/import-list.mjs';
 import { syncGitHub } from '../docs/sync.mjs';
-import { withContext, pinyinChoices, checkAnswer, clozeSentence, mistakeQueue, studyQueue, studySchedule } from '../docs/study.mjs';
+import { withContext, pinyinChoices, checkAnswer, checkDictation, clozeSentence, mistakeQueue, studyQueue, studySchedule } from '../docs/study.mjs';
 import { advancedExamples } from '../docs/advanced-examples.mjs';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const catalog=JSON.parse(readFileSync(resolve(root,'docs/data/catalog.json'),'utf8'));
@@ -37,7 +37,7 @@ test('service worker precaches every required file and serves cached assets offl
 });
 test('manifest uses project-relative URLs and includes iPhone installation metadata',()=>{
   const manifest=JSON.parse(readFileSync(resolve(root,'docs/manifest.webmanifest'),'utf8'));
-  assert.equal(manifest.start_url,'./import.html');assert.equal(manifest.id,'./');assert.equal(manifest.scope,'./');assert.equal(manifest.display,'standalone');
+  assert.equal(manifest.start_url,'./dictation.html');assert.equal(manifest.id,'./');assert.equal(manifest.scope,'./');assert.equal(manifest.display,'standalone');
   for(const icon of manifest.icons)assert.ok(existsSync(resolve(root,'docs',icon.src)));
   const html=readFileSync(resolve(root,'docs/index.html'),'utf8');assert.ok(html.includes('apple-touch-icon'));assert.ok(html.includes('viewport-fit=cover'));
 });
@@ -63,6 +63,20 @@ test('advanced English examples include Russian translations and gap-fill on all
     assert.ok(clozeSentence(card),word.text);
     assert.match(card.sentenceTranslation,/\p{Script=Cyrillic}/u);
   }
+});
+
+test('dictation checks words, whole sentences and strict pinyin tones',()=>{
+  const zh={text:'喜欢',reading:'xǐhuan',sentence:'我喜欢喝茶。',sourceLanguage:'zh-CN'};
+  assert.ok(checkDictation(zh,'xi3 huan5','listen-tones'));
+  assert.ok(checkDictation(zh,'xǐ huan','listen-tones'));
+  assert.equal(checkDictation(zh,'xi1huan5','listen-tones'),false);
+  assert.equal(checkDictation(zh,'xihuan','listen-tones'),false);
+  assert.ok(checkDictation(zh,'我 喜欢 喝茶','listen-sentence'));
+  assert.equal(checkDictation(zh,'我喜欢','listen-sentence'),false);
+  assert.ok(checkDictation(zh,'xihuan','listen-word'));
+  const en={text:'book',sentence:'I can’t find the book.',sourceLanguage:'en-US'};
+  assert.ok(checkDictation(en,"i can't find the book",'listen-sentence'));
+  assert.ok(checkDictation(en,'BOOK','listen-word'));
 });
 
 test('mistake practice includes Poor and graded incorrect answers, even for cards due later',()=>{
