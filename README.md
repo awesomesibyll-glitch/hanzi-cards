@@ -12,10 +12,12 @@ Russian words** (community CEFR A1–C2). Choose a course and level above the ca
 English translations and levels are AI-generated and not human-verified; they
 may contain errors. The existing six card IDs and review progress are preserved.
 
-**Audio** offers individual Chinese/English/Russian system voices and speed.
-Word and sentence playback use the Web Speech API. Enhanced and Premium
-on-device voices are preferred when the browser exposes them. Install the
-corresponding system language voice to listen offline.
+**Audio** lets you choose American or British English, a matching system
+voice and playback speed. Word playback tries attributed human recordings
+from Wikimedia Commons or Free Dictionary API when enabled. Downloaded
+recordings can replay offline. Web Speech handles sentences and words without
+recordings, preferring Enhanced and Premium on-device voices when available.
+Choose **System voices only** to keep pronunciation entirely on the device.
 
 **Study settings** switches between classic cards, typing the answer and
 **Fill the gap**. Gap-fill cards use examples containing the exact target word
@@ -26,6 +28,7 @@ scheduled reviews remain available after reaching the cap. Custom words require
 a sentence and translation. Built-in words have curated examples where available
 and bilingual practice sentences elsewhere. The Chinese add-word form includes
 an offline pinyin picker for common expressions.
+The B2–C2 English examples are original sentences paired with Russian translations.
 
 Expanded words and all 2,970 Chinese stroke guides are bundled in compressed
 files (~1.5 MB total). This requires a browser with DecompressionStream support

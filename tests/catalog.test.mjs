@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { voiceScore } from '../web/audio.mjs';
+import { englishRecording } from '../web/recordings.mjs';
 const catalog=JSON.parse(readFileSync(new URL('../web/data/catalog.json',import.meta.url),'utf8'));
 const load=name=>JSON.parse(gunzipSync(Buffer.concat(catalog.packs[name].map(file=>readFileSync(new URL('../web/data/'+file,import.meta.url))))).toString('utf8'));
 test('both courses have unique IDs, translations, levels and complete Chinese stroke coverage',()=>{
@@ -18,4 +19,16 @@ test('voice ranking prefers enhanced exact-language speech and excludes Cantones
   assert.ok(voiceScore({lang:'zh-CN',name:'Tingting Enhanced',localService:true},'zh-CN')>voiceScore({lang:'zh-CN',name:'Tingting Compact',localService:true},'zh-CN'));
   assert.ok(voiceScore({lang:'zh-HK',name:'Sinji',localService:true},'zh-CN')<0);
   assert.ok(voiceScore({lang:'en-US',name:'Ava Premium',localService:true},'en-US')>voiceScore({lang:'en-GB',name:'Daniel',localService:true},'en-US'));
+});
+test('UK and US pronunciation never substitute recordings from another or unknown accent',()=>{
+  const clip=accent=>({
+    audio:`https://api.dictionaryapi.dev/media/pronunciations/en/example${accent}.mp3`,
+    sourceUrl:'https://commons.wikimedia.org/wiki/File:Example.ogg',
+    license:{url:'https://creativecommons.org/licenses/by-sa/4.0/'}
+  });
+  const entries=[{phonetics:[clip(''),clip('-uk'),clip('-us')]}];
+  assert.match(englishRecording(entries,'en-GB').url,/-uk\.mp3$/);
+  assert.match(englishRecording(entries,'en-US').url,/-us\.mp3$/);
+  assert.equal(englishRecording([{phonetics:[clip(''),clip('-us')]}],'en-GB'),null);
+  assert.ok(voiceScore({lang:'en-US',name:'Premium',localService:true},'en-GB')<0);
 });

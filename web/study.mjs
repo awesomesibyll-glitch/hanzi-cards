@@ -1,5 +1,6 @@
 import { schedule, DAY } from './modules/srs.mjs';
 import { beginnerExamples } from './examples.mjs';
+import { advancedExamples } from './advanced-examples.mjs';
 
 // Common entries double as an offline input method and a set of natural examples.
 const chinese = [
@@ -49,7 +50,8 @@ export function pinyinChoices(text) {
 export function withContext(word) {
   if (word.sentence?.trim() && word.sentenceTranslation?.trim()) return word;
   const zh = word.sourceLanguage === 'zh-CN';
-  const example = (zh ? examples.get(word.text) : Object.hasOwn(english,word.text) ? english[word.text] : undefined) ??
+  const example = (!zh&&word.level>=4 ? advancedExamples.get(word.text) : undefined) ??
+    (zh ? examples.get(word.text) : Object.hasOwn(english,word.text) ? english[word.text] : undefined) ??
     beginnerExamples[zh?'zh':'en'].get(word.text);
   const [sentence, sentenceTranslation] = example ?? (zh
     ? [`我正在学习“${word.text}”这个词。`, `I’m learning the word “${word.text}”.`]

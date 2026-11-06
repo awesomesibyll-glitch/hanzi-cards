@@ -8,6 +8,7 @@ import { gunzipSync } from 'node:zlib';
 import { validateBackup, mergeSyncRecords, syncPayload, openLibrary, snapshot, saveReview, addWord } from '../docs/storage.mjs';
 import { syncGitHub } from '../docs/sync.mjs';
 import { withContext, pinyinChoices, checkAnswer, clozeSentence, studyQueue, studySchedule } from '../docs/study.mjs';
+import { advancedExamples } from '../docs/advanced-examples.mjs';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const catalog=JSON.parse(readFileSync(resolve(root,'docs/data/catalog.json'),'utf8'));
 const words=JSON.parse(gunzipSync(Buffer.concat(catalog.packs.words.map(file=>readFileSync(resolve(root,'docs/data',file))))).toString('utf8'));
@@ -34,7 +35,7 @@ test('service worker precaches every required file and serves cached assets offl
 });
 test('manifest uses project-relative URLs and includes iPhone installation metadata',()=>{
   const manifest=JSON.parse(readFileSync(resolve(root,'docs/manifest.webmanifest'),'utf8'));
-  assert.equal(manifest.start_url,'./context.html');assert.equal(manifest.id,'./');assert.equal(manifest.scope,'./');assert.equal(manifest.display,'standalone');
+  assert.equal(manifest.start_url,'./pronunciation.html');assert.equal(manifest.id,'./');assert.equal(manifest.scope,'./');assert.equal(manifest.display,'standalone');
   for(const icon of manifest.icons)assert.ok(existsSync(resolve(root,'docs',icon.src)));
   const html=readFileSync(resolve(root,'docs/index.html'),'utf8');assert.ok(html.includes('apple-touch-icon'));assert.ok(html.includes('viewport-fit=cover'));
 });
@@ -49,6 +50,16 @@ test('gap-fill masks exact words, preserves sentence structure and excludes prac
   for(const lang of ['zh-CN','en-US']){
     const beginner=words.filter(word=>word.sourceLanguage===lang&&word.level<=2).map(withContext);
     assert.ok(beginner.filter(word=>clozeSentence(word)).length>=20);
+  }
+});
+
+test('advanced English examples include Russian translations and gap-fill on all three levels',()=>{
+  const matched=words.filter(word=>word.sourceLanguage==='en-US'&&word.level>=4&&advancedExamples.has(word.text));
+  for(const level of [4,5,6])assert.ok(matched.filter(word=>word.level===level).length>=20);
+  for(const word of matched){
+    const card=withContext(word);
+    assert.ok(clozeSentence(card),word.text);
+    assert.match(card.sentenceTranslation,/\p{Script=Cyrillic}/u);
   }
 });
 
