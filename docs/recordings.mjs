@@ -4,6 +4,12 @@ const positive=new Map();
 const missing=new Set();
 const pending=new Map();
 
+export async function isAudioClip(blob){
+  if(!blob.size||blob.size>500_000)return false;
+  if(blob.type.startsWith('audio/'))return true;
+  return blob.type==='application/ogg'&&await blob.slice(0,4).text()==='OggS';
+}
+
 export function englishRecording(entries,language){
   const accent=accents[language];
   if(!accent||!Array.isArray(entries))return null;
@@ -71,7 +77,7 @@ export function loadRecording(text,language,reading){
         const download=await fetch(clip.url,{signal,credentials:'omit'});
         if(!download.ok)return null;
         const blob=await download.blob();
-        if(blob.size>500_000||!blob.type.startsWith('audio/'))return null;
+        if(!await isAudioClip(blob))return null;
         response=new Response(blob,{headers:{'Content-Type':blob.type,'X-Source':clip.source,'X-License':clip.license,'X-Artist':encodeURIComponent(clip.artist??'')}});
         if(cache)try{
           await cache.put(key,response.clone());

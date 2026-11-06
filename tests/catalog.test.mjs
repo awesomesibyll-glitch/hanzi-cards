@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { voiceScore } from '../web/audio.mjs';
-import { englishRecording } from '../web/recordings.mjs';
+import { englishRecording, isAudioClip } from '../web/recordings.mjs';
 const catalog=JSON.parse(readFileSync(new URL('../web/data/catalog.json',import.meta.url),'utf8'));
 const load=name=>JSON.parse(gunzipSync(Buffer.concat(catalog.packs[name].map(file=>readFileSync(new URL('../web/data/'+file,import.meta.url))))).toString('utf8'));
 test('both courses have unique IDs, translations, levels and complete Chinese stroke coverage',()=>{
@@ -31,4 +31,8 @@ test('UK and US pronunciation never substitute recordings from another or unknow
   assert.match(englishRecording(entries,'en-US').url,/-us\.mp3$/);
   assert.equal(englishRecording([{phonetics:[clip(''),clip('-us')]}],'en-GB'),null);
   assert.ok(voiceScore({lang:'en-US',name:'Premium',localService:true},'en-GB')<0);
+});
+test('accepts Wikimedia’s application/ogg only when it is an Ogg file',async()=>{
+  assert.equal(await isAudioClip(new Blob(['OggS...'],{type:'application/ogg'})),true);
+  assert.equal(await isAudioClip(new Blob(['<html>'],{type:'application/ogg'})),false);
 });
