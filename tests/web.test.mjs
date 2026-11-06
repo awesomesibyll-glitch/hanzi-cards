@@ -35,7 +35,7 @@ test('service worker precaches every required file and serves cached assets offl
 });
 test('manifest uses project-relative URLs and includes iPhone installation metadata',()=>{
   const manifest=JSON.parse(readFileSync(resolve(root,'docs/manifest.webmanifest'),'utf8'));
-  assert.equal(manifest.start_url,'./mistakes.html');assert.equal(manifest.id,'./');assert.equal(manifest.scope,'./');assert.equal(manifest.display,'standalone');
+  assert.equal(manifest.start_url,'./today.html');assert.equal(manifest.id,'./');assert.equal(manifest.scope,'./');assert.equal(manifest.display,'standalone');
   for(const icon of manifest.icons)assert.ok(existsSync(resolve(root,'docs',icon.src)));
   const html=readFileSync(resolve(root,'docs/index.html'),'utf8');assert.ok(html.includes('apple-touch-icon'));assert.ok(html.includes('viewport-fit=cover'));
 });

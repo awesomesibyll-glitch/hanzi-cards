@@ -4,6 +4,7 @@ import { playAudio, stopAudio, audioPreference, availableVoices, englishAccent, 
 import { checkAnswer, clozeSentence, mistakeQueue, pinyinChoices, studyQueue, studySchedule } from './study-v8.mjs';
 import { syncGitHub } from './sync.mjs';
 const $=id=>document.getElementById(id);
+const openPanel=id=>{$('menu-dialog').close();$(id).showModal();};
 for(const gesture of ['gesturestart','gesturechange'])document.addEventListener(gesture,event=>event.preventDefault(),{passive:false});
 document.addEventListener('touchmove',event=>{if(event.touches.length>1&&event.cancelable)event.preventDefault();},{passive:false});
 const svgNS='http://www.w3.org/2000/svg';
@@ -39,7 +40,6 @@ function switchDeck(next){
 }
 function options(){
   const config=DECKS[deck],words=deckWords();
-  $('library-description').textContent=`${words.length.toLocaleString()} words in this course. Add your own words too.`;
   $('level').replaceChildren(new Option('All levels','0'),...config.labels.map((label,i)=>new Option(`${label} (${words.filter(w=>w.level===i+1).length})`,String(i+1))));
   $('level').value=safePreference('hanzi-level-'+deck)??'1';
   if(!$('level').value)$('level').value='1';
@@ -47,7 +47,6 @@ function options(){
   $('topic').value=safePreference('hanzi-topic-'+deck)??'';
   if(!$('topic').value)$('topic').value='';
   for(const key of ['zh','en']){$('deck-'+key).classList.toggle('active',deck===key);$('deck-'+key).setAttribute('aria-selected',String(deck===key));}
-  $('deck-description').textContent=deck==='zh'?'HSK 3.0 (2021) · Chinese words with English meanings':'CEFR A1–C2 · English words with Russian meanings';
   $('source-word-label').textContent=deck==='zh'?'Chinese word':'English word';
   $('reading-label').textContent=deck==='zh'?'Pinyin with tones':'Pronunciation / IPA';
   document.querySelector('[name="reading"]').required=deck==='zh';
@@ -80,9 +79,10 @@ function showNext(){
   revealed=false;incorrectAnswer=false;renderStats(queue.length);
   $('mistakes').setAttribute('aria-pressed',String(mistakeSession));
   $('mistakes').textContent=mistakeSession?'Back to regular study':'Practise my mistakes';
-  $('mistake-status').hidden=!mistakeSession;
-  $('due-label').textContent=mistakeSession?'mistakes left to practise':'left to study today';
-  $('card').hidden=!card;$('empty').hidden=!!card;$('writing').hidden=!card||deck!=='zh'||active;$('dataset-notice').hidden=!card?.generated;
+  $('mistake-bar').hidden=!mistakeSession;
+  $('study-title').textContent=mistakeSession?'My mistakes':'Today';
+  $('due-label').textContent='left to study';
+  $('card').hidden=!card;$('empty').hidden=!!card;$('writing').hidden=!card||deck!=='zh'||active;
   if(!card){
     const next=cards.filter(c=>c.due>now).sort((a,b)=>a.due-b.due)[0];
     $('next-due').textContent=mistakeSession?(completedMistakes.size?'Practice complete for this selection.':'No mistakes in this selection yet. Cards appear here after a Poor rating or a graded incorrect answer.'):limited?'You reached today’s new-word limit. More new words will unlock tomorrow.':next?`Your next review is ${formatDue(next.due)}.`:cloze?'No gap-fill cards in this selection. Try All levels or switch modes in Study settings.':'No words match these filters. Choose another selection or add a word.';
@@ -96,9 +96,9 @@ function showNext(){
   $('sentence').textContent=card.sentence;$('sentence').lang=card.sourceLanguage;
   $('sentence-translation').textContent=card.sentenceTranslation;$('sentence-translation').lang=card.targetLanguage;
   $('context-label').textContent=card.contextKind==='practice'?'PRACTICE SENTENCE':'IN CONTEXT';
-  $('card-category').textContent=`${DECKS[deck].labels[card.level-1]??card.level} · ${card.topic}`;
+  $('card-category').textContent=DECKS[deck].labels[card.level-1]?.split(' · ')[0]??card.level;
   $('card-status').textContent=mistakeSession?'MISTAKE PRACTICE':card.due===0?'NEW WORD':'REVIEW';
-  $('answer').hidden=true;$('ratings').hidden=true;$('reveal').hidden=active;$('card-prompt').hidden=false;
+  $('answer').hidden=true;$('ratings').hidden=true;$('reveal').hidden=active;$('card-prompt').hidden=!active;
   $('card-prompt').textContent=cloze?(deck==='zh'?'Fill the gap with Hanzi or pinyin.':'Type the missing English word.'):active?(deck==='zh'?'Type the Hanzi or pinyin for this meaning.':'Type the English word for this meaning.'):'Take a moment. What does this word mean?';
   $('recall-form').hidden=!active;$('recall-form').reset();$('recall-feedback').hidden=true;
   $('skip-practice').hidden=!mistakeSession;$('next-practice').hidden=true;
@@ -139,7 +139,7 @@ function stopAnimation(){if(animation)clearInterval(animation);animation=null;$(
 function clearInk(){points=[];pointer=null;$('ink').setAttribute('points','');}
 function drawOutlines(){
   $('outlines').replaceChildren();
-  entry?.strokes.forEach((d,i)=>{const p=document.createElementNS(svgNS,'path');p.setAttribute('d',d);const color=i<strokeIndex?'#287e68':'#e1e8df';p.setAttribute('fill',entry.centerlines?'none':color);if(entry.centerlines){p.setAttribute('stroke',color);p.setAttribute('stroke-width','48');p.setAttribute('stroke-linecap','round');p.setAttribute('stroke-linejoin','round');}$('outlines').append(p);});
+  entry?.strokes.forEach((d,i)=>{const p=document.createElementNS(svgNS,'path');p.setAttribute('d',d);const color=i<strokeIndex?'var(--accent)':'var(--line)';p.setAttribute('fill',entry.centerlines?'none':color);if(entry.centerlines){p.setAttribute('stroke',color);p.setAttribute('stroke-width','48');p.setAttribute('stroke-linecap','round');p.setAttribute('stroke-linejoin','round');}$('outlines').append(p);});
   $('stroke-counter').textContent=entry?`STROKE ${Math.min(strokeIndex+1,entry.strokes.length)} OF ${entry.strokes.length}`:'NO GUIDE';
 }
 function selectCharacter(character){
@@ -192,10 +192,12 @@ $('recall-form').onsubmit=event=>{
 };
 $('mistakes').onclick=()=>{
   if(busy||!library)return;
+  $('menu-dialog').close();
   mistakeSession=!mistakeSession;
   completedMistakes.clear();
   showNext();
 };
+$('leave-mistakes').onclick=$('mistakes').onclick;
 $('skip-practice').onclick=()=>{if(mistakeSession)reveal(true);};
 $('next-practice').onclick=()=>{
   if(!mistakeSession||!card||!revealed)return;
@@ -205,7 +207,7 @@ $('next-practice').onclick=()=>{
 $('study-settings').onclick=()=>{
   $('study-mode').value=studyMode();
   $('daily-limit').value=String(dailyLimit());
-  $('study-dialog').showModal();
+  openPanel('study-dialog');
 };
 $('close-study').onclick=()=>$('study-dialog').close();
 $('study-form').onsubmit=event=>{
@@ -221,7 +223,8 @@ $('study-form').onsubmit=event=>{
 $('refresh').onclick=()=>reload().then(showNext).catch(e=>notify(e.message));
 $('auto-audio').checked=safePreference('hanzi-auto-audio')==='true';
 $('auto-audio').onchange=()=>{safePreference('hanzi-auto-audio',String($('auto-audio').checked));if($('auto-audio').checked&&card&&(!recallMode()||revealed))speakWord();};
-$('help').onclick=()=>{$('installed-status').textContent=(matchMedia('(display-mode: standalone)').matches||navigator.standalone)?'You are already using the installed web app.':'';$('help-dialog').showModal();};
+$('open-menu').onclick=()=>$('menu-dialog').showModal();
+$('help').onclick=()=>{$('installed-status').textContent=(matchMedia('(display-mode: standalone)').matches||navigator.standalone)?'You are already using the installed web app.':'';openPanel('help-dialog');};
 const wordForm=$('word-form');
 function renderPinyin(){
   const reading=wordForm.elements.namedItem('reading');
@@ -240,7 +243,7 @@ function renderPinyin(){
   }));
 }
 wordForm.elements.namedItem('reading').oninput=renderPinyin;
-$('add-word').onclick=()=>{renderPinyin();$('add-dialog').showModal();};$('close-add').onclick=()=>$('add-dialog').close();
+$('add-word').onclick=()=>{renderPinyin();openPanel('add-dialog');};$('close-add').onclick=()=>$('add-dialog').close();
 $('word-form').onsubmit=async e=>{
   e.preventDefault();if(busy)return;busy=true;
   const form=new FormData(e.currentTarget);
@@ -248,10 +251,13 @@ $('word-form').onsubmit=async e=>{
   catch(e){notify(`Word was not saved: ${e.message}`);}finally{busy=false;}
 };
 $('backup').onclick=async()=>{
+  $('menu-dialog').close();
   try{const data=await snapshot();const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download=`hanzi-cards-${new Date().toISOString().slice(0,10)}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),60000);notify('Backup exported. On iPhone, save the file to Files.');}catch(e){notify(`Backup failed: ${e.message}`);}
 };
+$('choose-restore').onclick=()=>$('restore').click();
 $('restore').onchange=async e=>{
   const file=e.target.files?.[0];if(!file)return;
+  $('menu-dialog').close();
   if(busy||!library){notify('Wait for the library or the current save to finish.');e.target.value='';return;}
   busy=true;
   try{
@@ -285,7 +291,7 @@ $('install-desktop').onclick = async () => {
 const syncDialog = $('sync-dialog');
 $('open-sync').onclick = () => {
   $('sync-id').value = safePreference('hanzi-sync-id') || '';
-  syncDialog.showModal();
+  openPanel('sync-dialog');
 };
 $('close-sync').onclick = () => syncDialog.close();
 $('copy-sync-id').onclick = async () => {
@@ -351,7 +357,7 @@ function voiceSettings(){
   $('speech-rate').value=audioPreference('speech-rate')||'1';
   $('rate-value').textContent=$('speech-rate').value+'×';
 }
-$('audio-settings').onclick=()=>{voiceSettings();$('audio-preview-status').textContent='';$('test-voice').disabled=!card||(recallMode()&&!revealed);$('audio-dialog').showModal();};
+$('audio-settings').onclick=()=>{voiceSettings();$('audio-preview-status').textContent='';$('test-voice').disabled=!card||(recallMode()&&!revealed);openPanel('audio-dialog');};
 $('close-audio').onclick=()=>$('audio-dialog').close();
 $('english-accent').onchange=()=>{englishAccent($('english-accent').value);stopAudio();recordingCredit(null);voiceSettings();if(card&&(!recallMode()||revealed))prepareWordAudio(card.text,card.sourceLanguage,card.reading);};
 $('recording-mode').onchange=()=>{audioPreference('recording-mode',$('recording-mode').value);stopAudio();recordingCredit(null);if(card&&(!recallMode()||revealed))prepareWordAudio(card.text,card.sourceLanguage,card.reading);};
@@ -380,5 +386,5 @@ try{
   offlineFiles=['catalog.json',...catalog.packs.words,...catalog.packs.strokes];
   const load=async files=>{if(!window.DecompressionStream)throw new Error('Please update Safari/iOS to use the expanded offline catalog.');const chunks=[];for(let i=0;i<files.length;i+=8){const batch=await Promise.all(files.slice(i,i+8).map(async file=>{const response=await fetch('./data/'+file);if(!response.ok)throw new Error('Word pack download failed. Reconnect and reload.');return response.blob();}));chunks.push(...batch);}return new Response(new Blob(chunks).stream().pipeThrough(new DecompressionStream('gzip'))).json();};
   const [words,strokes]=await Promise.all([load(catalog.packs.words),load(catalog.packs.strokes)]);strokeBank=strokes;
-  await openLibrary(words);await reload();options();showNext();void offlineSetup();$('library-description').textContent=`${deckWords().length.toLocaleString()} words in this course. Add your own words too.`;
+  await openLibrary(words);await reload();options();showNext();void offlineSetup();
 }catch(e){$('card').hidden=true;$('writing').hidden=true;notify(`Could not open your library: ${e.message}. Check Safari website storage permissions, then reload.`);}
