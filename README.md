@@ -30,6 +30,10 @@ and bilingual practice sentences elsewhere. The Chinese add-word form includes
 an offline pinyin picker for common expressions.
 The B2–C2 English examples are original sentences paired with Russian translations.
 
+**Practise my mistakes** opens a separate queue for the selected course and
+filters. It uses Poor ratings and incorrect typed answers saved with a grade.
+Practice does not record reviews, change due dates or consume the daily new-word cap.
+
 Expanded words and all 2,970 Chinese stroke guides are bundled in compressed
 files (~1.5 MB total). This requires a browser with DecompressionStream support
 (modern Safari/iOS). See THIRD_PARTY_NOTICES.md for catalog licenses and sources.

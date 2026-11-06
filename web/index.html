@@ -19,7 +19,8 @@
     <header><a class="brand" href="./" aria-label="Hanzi Cards home"><img class="brand-icon" src="./icons/mark.svg" alt=""><span>Hanzi Cards<small>A LITTLE PRACTICE, EVERY DAY</small></span></a><div class="header-actions"><button id="study-settings" class="text-button">Study settings</button><button id="audio-settings" class="text-button">Audio</button><button id="open-sync" class="text-button">GitHub Sync</button><button id="help" class="icon-button" aria-label="Installation and help">?</button></div></header>
     <main>
       <div class="intro"><div><span class="eyebrow">YOUR DAILY PRACTICE</span><h1>Make room for<br><em>one more word.</em></h1></div><span class="stamp" aria-hidden="true">学<br>习</span></div>
-      <nav class="deck-tabs" role="tablist" aria-label="Language course"><button id="deck-zh" role="tab" class="active">中文 <span>Chinese → English</span></button><button id="deck-en" role="tab">Aa <span>English → Russian</span></button></nav><p id="deck-description" class="course-description"></p><div class="stats" aria-label="Study statistics"><div><strong id="due-count">—</strong><span>left to study today</span></div><div><strong id="today-count">—</strong><span>reviews today</span></div><div><strong id="library-count">—</strong><span>words in your library</span></div></div>
+      <nav class="deck-tabs" role="tablist" aria-label="Language course"><button id="deck-zh" role="tab" class="active">中文 <span>Chinese → English</span></button><button id="deck-en" role="tab">Aa <span>English → Russian</span></button></nav><p id="deck-description" class="course-description"></p><div class="stats" aria-label="Study statistics"><div><strong id="due-count">—</strong><span id="due-label">left to study today</span></div><div><strong id="today-count">—</strong><span>reviews today</span></div><div><strong id="library-count">—</strong><span>words in your library</span></div></div>
+      <div id="mistake-bar"><button id="mistakes" class="secondary" aria-pressed="false">Practise my mistakes</button><span id="mistake-status" role="status" hidden>Practice only · your review schedule stays the same.</span></div>
       <div id="notice" role="status" aria-live="polite" hidden></div>
       <div class="toolbar"><label>Level<select id="level"><option value="0">All levels</option></select></label><label>Topic<select id="topic"><option value="">All topics</option></select></label><label class="audio-setting"><input id="auto-audio" type="checkbox"> Auto audio</label></div>
       <p id="dataset-notice" class="data-notice" hidden>English translations and CEFR levels: AI-generated, not human-verified; may contain errors. <a href="./THIRD_PARTY_NOTICES.md" target="_blank" rel="noopener">Sources</a></p><section id="study" aria-label="Study card">
@@ -29,10 +30,12 @@
           <div id="word" lang="zh-CN">你好</div><p id="card-prompt">Take a moment. What does this word mean?</p>
           <form id="recall-form" hidden><label>Type your answer<input id="recall-input" required maxlength="160" autocomplete="off" autocapitalize="off" spellcheck="false" aria-describedby="recall-feedback"></label><button class="primary wide">Check answer</button></form>
           <p id="recall-feedback" role="status" hidden></p>
+          <button id="skip-practice" class="text-button" hidden>Show answer</button>
           <div id="answer" hidden><p id="reading" lang="zh-Latn"></p><h2 id="translation"></h2><button id="play-en" class="text-button">Listen in English ↗</button>
             <div class="context-box"><div class="context-heading"><span class="eyebrow" id="context-label">IN CONTEXT</span><button id="play-sentence" class="secondary" aria-label="Play context sentence">🔊</button></div><p id="sentence"></p><p id="sentence-translation"></p></div>
           </div>
           <button id="reveal" class="primary wide">Reveal answer <span>↵</span></button>
+          <button id="next-practice" class="primary wide" hidden>Next practice card</button>
           <p id="card-audio-status" class="audio-credit" role="status"></p><p id="recording-credit" class="audio-credit" hidden></p><div id="ratings" hidden><p>How well did you remember?</p><div class="rating-grid"></div></div>
         </article>
         <div id="empty" class="empty" hidden><span>✓</span><h2>A little progress, well made.</h2><p id="next-due">You're all caught up in this selection.</p><button id="refresh" class="primary">Check again</button></div>

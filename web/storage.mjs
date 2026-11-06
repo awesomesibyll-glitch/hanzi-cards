@@ -47,7 +47,7 @@ export async function snapshot() {
   });
   return {version:1,exportedAt:new Date().toISOString(),words,progress,reviews:state.reviews,attribution:[{source:'Complete HSK Vocabulary / CC-CEDICT',url:'https://github.com/drkameleon/complete-hsk-vocabulary',license:'CC BY-SA 4.0 (adapted dictionary fields)'},{source:'Vocab Bloom Hub',url:'https://huggingface.co/datasets/Fristail27/vocab-bloom-hub-en',license:'CC BY 4.0',notice:'AI-generated, not human-verified; translations and CEFR levels may contain errors.'}]};
 }
-export async function saveReview(card,rating,now=Date.now(),limit=10) {
+export async function saveReview(card,rating,now=Date.now(),limit=10,mistake=false) {
   if(!RATINGS.includes(rating))throw new Error('Unknown review rating');
   await update(state=>{
     const index=state.progress.findIndex(p=>p.wordId===card.id);
@@ -58,7 +58,7 @@ export async function saveReview(card,rating,now=Date.now(),limit=10) {
     if (!current.due && !studyQueue([card],state.reviews,limit,now).queue.length) throw new Error('You reached today’s new-word limit.');
     const next={...studySchedule(current,rating,now),wordId:card.id};
     if(index===-1)state.progress.push(next);else state.progress[index]=next;
-    state.reviews.push({wordId:card.id,rating,reviewedAt:now,nextDue:next.due,rule:2});
+    state.reviews.push({wordId:card.id,rating,reviewedAt:now,nextDue:next.due,rule:2,...(mistake&&{mistake:true})});
   });
 }
 export async function addWord(word) {
@@ -111,13 +111,14 @@ export function syncPayload({words, reviews}) {
   return {
     version:1,
     words:words.filter(word => word.id.startsWith('custom-')),
-    reviews:reviews.map(({wordId, rating, reviewedAt, rule}) => ({wordId, rating, reviewedAt, rule}))
+    reviews:reviews.map(({wordId, rating, reviewedAt, rule, mistake}) => ({wordId, rating, reviewedAt, rule,...(mistake===true&&{mistake:true})}))
   };
 }
 
 export function mergeSyncRecords(words, reviews, backups) {
   const wordIds = new Set(words.map(word => word.id));
-  const reviewIds = new Set(reviews.map(reviewKey));
+  const knownReviews = new Map(reviews.map(review=>[reviewKey(review),review]));
+  const mistakeUpdates = new Set();
   const newWords = [];
   const newReviews = [];
   const addedReviews = new Set();
@@ -140,9 +141,16 @@ export function mergeSyncRecords(words, reviews, backups) {
       }
       if (!wordIds.has(review.wordId)) continue;
       const key = reviewKey(review);
-      if (reviewIds.has(key)) continue;
-      reviewIds.add(key);
-      const clean = {wordId:review.wordId, rating:review.rating, reviewedAt:review.reviewedAt, rule:review.rule===2?2:1};
+      const known=knownReviews.get(key);
+      if (known) {
+        if(review.mistake===true&&known.mistake!==true){
+          if(addedReviews.has(known))known.mistake=true;
+          else mistakeUpdates.add(key);
+        }
+        continue;
+      }
+      const clean = {wordId:review.wordId, rating:review.rating, reviewedAt:review.reviewedAt, rule:review.rule===2?2:1,...(review.mistake===true&&{mistake:true})};
+      knownReviews.set(key,clean);
       newReviews.push(clean);
       addedReviews.add(clean);
       if (!byWord.has(clean.wordId)) byWord.set(clean.wordId, []);
@@ -159,12 +167,13 @@ export function mergeSyncRecords(words, reviews, backups) {
     }
     progress.set(wordId, {...state, wordId});
   }
-  return {words:newWords, reviews:newReviews, progress:[...progress.values()]};
+  return {words:newWords, reviews:newReviews, progress:[...progress.values()], mistakeUpdates};
 }
 
 export async function mergeSync(backups) {
   await update(state=>{
     const changes=mergeSyncRecords([...catalog.values(),...state.words],state.reviews,backups);
+    for(const review of state.reviews)if(changes.mistakeUpdates.has(reviewKey(review)))review.mistake=true;
     state.words.push(...changes.words);
     state.reviews.push(...changes.reviews);
     const progress=new Map(state.progress.map(p=>[p.wordId,p]));

@@ -1,7 +1,7 @@
 import { matchesStroke } from './modules/strokes.mjs';
 import { openLibrary, snapshot, saveReview, addWord, restoreBackup, validateBackup, mergeSync, syncPayload, STORAGE_KEY } from './storage.mjs';
 import { playAudio, stopAudio, audioPreference, availableVoices, englishAccent, prepareWordAudio } from './audio.mjs';
-import { checkAnswer, clozeSentence, pinyinChoices, studyQueue, studySchedule } from './study.mjs';
+import { checkAnswer, clozeSentence, mistakeQueue, pinyinChoices, studyQueue, studySchedule } from './study.mjs';
 import { syncGitHub } from './sync.mjs';
 const $=id=>document.getElementById(id);
 for(const gesture of ['gesturestart','gesturechange'])document.addEventListener(gesture,event=>event.preventDefault(),{passive:false});
@@ -26,7 +26,9 @@ function speakWord(notifyPlayback=audioStatus){
   if(card)void playAudio(card.text,card.sourceLanguage,notifyPlayback,{word:true,reading:card.reading,credit:recordingCredit});
 }
 const studyMode=()=>safePreference('hanzi-study-mode')||'classic';
-const recallMode=()=>['recall','cloze'].includes(studyMode());
+let mistakeSession=false, incorrectAnswer=false;
+const completedMistakes=new Set();
+const recallMode=()=>mistakeSession||['recall','cloze'].includes(studyMode());
 const dailyLimit=()=>[10,20,50].includes(Number(safePreference('hanzi-daily-limit'))) ? Number(safePreference('hanzi-daily-limit')) : 10;
 const grades={Again:'Poor',Hard:'Fair',Good:'Good'};
 const DECKS={zh:{source:'zh-CN',target:'en-US',name:'Chinese → English',labels:['HSK 1','HSK 2','HSK 3','HSK 4','HSK 5','HSK 6','HSK 7–9']},en:{source:'en-US',target:'ru-RU',name:'English → Russian',labels:['A1 · Beginner','A2 · Elementary','B1 · Intermediate','B2 · Upper intermediate','C1 · Advanced','C2 · Proficiency']}};
@@ -58,10 +60,13 @@ function options(){
 }
 function filteredCards(){
   const progress=new Map(library.progress.map(p=>[p.wordId,p]));
-  const cloze=studyMode()==='cloze';
+  const cloze=!mistakeSession&&studyMode()==='cloze';
   return deckWords().filter(w=>(!Number($('level').value)||w.level===Number($('level').value))&&(!$('topic').value||w.topic===$('topic').value)&&(!cloze||clozeSentence(w))).map(w=>({...w,...progress.get(w.id)}));
 }
-function renderStats(remaining=studyQueue(filteredCards(),library.reviews,dailyLimit()).queue.length){
+function currentQueue(cards,now=Date.now()){
+  return mistakeSession ? {queue:mistakeQueue(cards,library.reviews,completedMistakes)} : studyQueue(cards,library.reviews,dailyLimit(),now);
+}
+function renderStats(remaining=currentQueue(filteredCards()).queue.length){
   const midnight=new Date();midnight.setHours(0,0,0,0);
   $('due-count').textContent=remaining;
   const ids=new Set(deckWords().map(w=>w.id));$('today-count').textContent=library.reviews.filter(r=>ids.has(r.wordId)&&r.reviewedAt>=midnight.getTime()).length;
@@ -69,14 +74,18 @@ function renderStats(remaining=studyQueue(filteredCards(),library.reviews,dailyL
 }
 function showNext(){
   stopAnimation();clearInk();stopAudio();recordingCredit(null);audioStatus('');
-  const cards=filteredCards(),now=Date.now(),active=recallMode(),cloze=studyMode()==='cloze';
-  const {queue,limited}=studyQueue(cards,library.reviews,dailyLimit(),now);
+  const cards=filteredCards(),now=Date.now(),active=recallMode(),cloze=!mistakeSession&&studyMode()==='cloze';
+  const {queue,limited}=currentQueue(cards,now);
   card=queue[0];
-  revealed=false;renderStats(queue.length);
+  revealed=false;incorrectAnswer=false;renderStats(queue.length);
+  $('mistakes').setAttribute('aria-pressed',String(mistakeSession));
+  $('mistakes').textContent=mistakeSession?'Back to regular study':'Practise my mistakes';
+  $('mistake-status').hidden=!mistakeSession;
+  $('due-label').textContent=mistakeSession?'mistakes left to practise':'left to study today';
   $('card').hidden=!card;$('empty').hidden=!!card;$('writing').hidden=!card||deck!=='zh'||active;$('dataset-notice').hidden=!card?.generated;
   if(!card){
     const next=cards.filter(c=>c.due>now).sort((a,b)=>a.due-b.due)[0];
-    $('next-due').textContent=limited?'You reached today’s new-word limit. More new words will unlock tomorrow.':next?`Your next review is ${formatDue(next.due)}.`:cloze?'No gap-fill cards in this selection. Try All levels or switch modes in Study settings.':'No words match these filters. Choose another selection or add a word.';
+    $('next-due').textContent=mistakeSession?(completedMistakes.size?'Practice complete for this selection.':'No mistakes in this selection yet. Cards appear here after a Poor rating or a graded incorrect answer.'):limited?'You reached today’s new-word limit. More new words will unlock tomorrow.':next?`Your next review is ${formatDue(next.due)}.`:cloze?'No gap-fill cards in this selection. Try All levels or switch modes in Study settings.':'No words match these filters. Choose another selection or add a word.';
     return;
   }
   $('word').textContent=cloze?clozeSentence(card):active?card.translation:card.text;$('reading').textContent=card.reading;$('translation').textContent=card.translation;
@@ -88,10 +97,11 @@ function showNext(){
   $('sentence-translation').textContent=card.sentenceTranslation;$('sentence-translation').lang=card.targetLanguage;
   $('context-label').textContent=card.contextKind==='practice'?'PRACTICE SENTENCE':'IN CONTEXT';
   $('card-category').textContent=`${DECKS[deck].labels[card.level-1]??card.level} · ${card.topic}`;
-  $('card-status').textContent=card.due===0?'NEW WORD':'REVIEW';
+  $('card-status').textContent=mistakeSession?'MISTAKE PRACTICE':card.due===0?'NEW WORD':'REVIEW';
   $('answer').hidden=true;$('ratings').hidden=true;$('reveal').hidden=active;$('card-prompt').hidden=false;
   $('card-prompt').textContent=cloze?(deck==='zh'?'Fill the gap with Hanzi or pinyin.':'Type the missing English word.'):active?(deck==='zh'?'Type the Hanzi or pinyin for this meaning.':'Type the English word for this meaning.'):'Take a moment. What does this word mean?';
   $('recall-form').hidden=!active;$('recall-form').reset();$('recall-feedback').hidden=true;
+  $('skip-practice').hidden=!mistakeSession;$('next-practice').hidden=true;
   const holder=document.querySelector('.rating-grid');holder.replaceChildren();
   for(const [rating,label] of Object.entries(grades)){
     const button=document.createElement('button');const next=studySchedule(card,rating,now);
@@ -110,15 +120,16 @@ function showNext(){
 }
 async function reload(){library=await snapshot();renderStats();}
 async function rate(rating){
-  if(busy||!card||!revealed)return;
+  if(busy||!card||!revealed||mistakeSession)return;
   busy=true;const target=card;document.querySelectorAll('.rating-grid button').forEach(b=>b.disabled=true);
-  try{await saveReview(target,rating,Date.now(),dailyLimit());await reload();notify('');showNext();}
+  try{await saveReview(target,rating,Date.now(),dailyLimit(),incorrectAnswer);await reload();notify('');showNext();}
   catch(e){notify(e.message);await reload();showNext();}
   finally{busy=false;document.querySelectorAll('.rating-grid button').forEach(b=>b.disabled=false);}
 }
 function reveal(checked=false){
   if(!card||revealed||busy||(recallMode()&&checked!==true))return;
-  revealed=true;$('answer').hidden=false;$('ratings').hidden=false;$('reveal').hidden=true;$('card-prompt').hidden=true;
+  revealed=true;$('answer').hidden=false;$('ratings').hidden=mistakeSession;$('reveal').hidden=true;$('card-prompt').hidden=true;
+  $('skip-practice').hidden=true;$('next-practice').hidden=!mistakeSession;
   $('recall-form').hidden=true;$('play-zh').hidden=false;
   $('word').textContent=card.text;$('word').lang=card.sourceLanguage;$('word').classList.remove('recall-prompt');
   prepareWordAudio(card.text,card.sourceLanguage,card.reading);
@@ -172,11 +183,24 @@ $('recall-form').onsubmit=event=>{
   const input=$('recall-input').value.trim();
   if (!card||busy||revealed||!input) return;
   const correct=checkAnswer(card,input);
+  incorrectAnswer=!correct;
   const feedback=$('recall-feedback');
   feedback.dataset.correct=String(correct);
   feedback.textContent=correct?'Correct!':`Your answer: ${input}. Compare it with the card below.`;
   feedback.hidden=false;
   reveal(true);
+};
+$('mistakes').onclick=()=>{
+  if(busy||!library)return;
+  mistakeSession=!mistakeSession;
+  completedMistakes.clear();
+  showNext();
+};
+$('skip-practice').onclick=()=>{if(mistakeSession)reveal(true);};
+$('next-practice').onclick=()=>{
+  if(!mistakeSession||!card||!revealed)return;
+  completedMistakes.add(card.id);
+  showNext();
 };
 $('study-settings').onclick=()=>{
   $('study-mode').value=studyMode();

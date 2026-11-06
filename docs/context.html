@@ -11,7 +11,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
   <link rel="icon" href="./icons/mark.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles-v4.css">
+  <link rel="stylesheet" href="./styles-v8.css">
   <title>Hanzi Cards · Daily Chinese practice</title>
 </head>
 <body>
@@ -19,7 +19,8 @@
     <header><a class="brand" href="./" aria-label="Hanzi Cards home"><img class="brand-icon" src="./icons/mark.svg" alt=""><span>Hanzi Cards<small>A LITTLE PRACTICE, EVERY DAY</small></span></a><div class="header-actions"><button id="study-settings" class="text-button">Study settings</button><button id="audio-settings" class="text-button">Audio</button><button id="open-sync" class="text-button">GitHub Sync</button><button id="help" class="icon-button" aria-label="Installation and help">?</button></div></header>
     <main>
       <div class="intro"><div><span class="eyebrow">YOUR DAILY PRACTICE</span><h1>Make room for<br><em>one more word.</em></h1></div><span class="stamp" aria-hidden="true">学<br>习</span></div>
-      <nav class="deck-tabs" role="tablist" aria-label="Language course"><button id="deck-zh" role="tab" class="active">中文 <span>Chinese → English</span></button><button id="deck-en" role="tab">Aa <span>English → Russian</span></button></nav><p id="deck-description" class="course-description"></p><div class="stats" aria-label="Study statistics"><div><strong id="due-count">—</strong><span>left to study today</span></div><div><strong id="today-count">—</strong><span>reviews today</span></div><div><strong id="library-count">—</strong><span>words in your library</span></div></div>
+      <nav class="deck-tabs" role="tablist" aria-label="Language course"><button id="deck-zh" role="tab" class="active">中文 <span>Chinese → English</span></button><button id="deck-en" role="tab">Aa <span>English → Russian</span></button></nav><p id="deck-description" class="course-description"></p><div class="stats" aria-label="Study statistics"><div><strong id="due-count">—</strong><span id="due-label">left to study today</span></div><div><strong id="today-count">—</strong><span>reviews today</span></div><div><strong id="library-count">—</strong><span>words in your library</span></div></div>
+      <div id="mistake-bar"><button id="mistakes" class="secondary" aria-pressed="false">Practise my mistakes</button><span id="mistake-status" role="status" hidden>Practice only · your review schedule stays the same.</span></div>
       <div id="notice" role="status" aria-live="polite" hidden></div>
       <div class="toolbar"><label>Level<select id="level"><option value="0">All levels</option></select></label><label>Topic<select id="topic"><option value="">All topics</option></select></label><label class="audio-setting"><input id="auto-audio" type="checkbox"> Auto audio</label></div>
       <p id="dataset-notice" class="data-notice" hidden>English translations and CEFR levels: AI-generated, not human-verified; may contain errors. <a href="./THIRD_PARTY_NOTICES.md" target="_blank" rel="noopener">Sources</a></p><section id="study" aria-label="Study card">
@@ -29,10 +30,12 @@
           <div id="word" lang="zh-CN">你好</div><p id="card-prompt">Take a moment. What does this word mean?</p>
           <form id="recall-form" hidden><label>Type your answer<input id="recall-input" required maxlength="160" autocomplete="off" autocapitalize="off" spellcheck="false" aria-describedby="recall-feedback"></label><button class="primary wide">Check answer</button></form>
           <p id="recall-feedback" role="status" hidden></p>
+          <button id="skip-practice" class="text-button" hidden>Show answer</button>
           <div id="answer" hidden><p id="reading" lang="zh-Latn"></p><h2 id="translation"></h2><button id="play-en" class="text-button">Listen in English ↗</button>
             <div class="context-box"><div class="context-heading"><span class="eyebrow" id="context-label">IN CONTEXT</span><button id="play-sentence" class="secondary" aria-label="Play context sentence">🔊</button></div><p id="sentence"></p><p id="sentence-translation"></p></div>
           </div>
           <button id="reveal" class="primary wide">Reveal answer <span>↵</span></button>
+          <button id="next-practice" class="primary wide" hidden>Next practice card</button>
           <p id="card-audio-status" class="audio-credit" role="status"></p><p id="recording-credit" class="audio-credit" hidden></p><div id="ratings" hidden><p>How well did you remember?</p><div class="rating-grid"></div></div>
         </article>
         <div id="empty" class="empty" hidden><span>✓</span><h2>A little progress, well made.</h2><p id="next-due">You're all caught up in this selection.</p><button id="refresh" class="primary">Check again</button></div>
@@ -63,5 +66,5 @@
   <dialog id="audio-dialog"><button id="close-audio" class="dialog-close" aria-label="Close audio settings">×</button><span class="eyebrow">PRONUNCIATION</span><h2>Find your voice.</h2><label>English accent<select id="english-accent"><option value="en-US">American English (US)</option><option value="en-GB">British English (UK)</option></select></label><label>Word pronunciation<select id="recording-mode"><option value="prefer">Prefer human recordings when available</option><option value="system">System voices only (offline)</option></select></label><p>Human recordings are prepared for the current visible word and cached for offline replay. If a recording is unavailable, words and sentences use a matching voice on this device.</p><label>Chinese system voice<select id="voice-zh-CN"></select></label><label>English system voice<select id="voice-en-US"></select></label><label>Russian system voice<select id="voice-ru-RU"></select></label><label>Speed <output id="rate-value">1×</output><input id="speech-rate" type="range" min="0.7" max="1.2" step="0.05" value="1"></label><p>For better Chinese speech, download an Enhanced/Premium Mandarin voice in iPhone Settings → Accessibility → speech/reading settings, then reopen this app. Only voices exposed by Safari can be selected.</p><button id="test-voice" class="primary wide">Play current word</button><p id="audio-preview-status" role="status"></p></dialog>
   <dialog id="study-dialog"><form method="dialog" id="study-form"><button type="button" class="dialog-close" id="close-study" aria-label="Close study settings">×</button><span class="eyebrow">MAKE IT YOURS</span><h2>Study settings</h2><label>Study mode<select id="study-mode"><option value="classic">Classic flashcards</option><option value="recall">Type the answer</option><option value="cloze">Fill the gap</option></select></label><label>New words per day<select id="daily-limit"><option value="10">10</option><option value="20">20</option><option value="50">50</option></select></label><p>Fill the gap uses cards with a complete example containing the exact word. The limit is shared across courses. Reviews of previously studied cards always remain available.</p><button class="primary wide">Save settings</button></form></dialog>
   <noscript>This study app needs JavaScript enabled to save and review cards.</noscript>
-  <script type="module" src="./app-v7.mjs"></script>
+  <script type="module" src="./app-v8.mjs"></script>
 </body></html>

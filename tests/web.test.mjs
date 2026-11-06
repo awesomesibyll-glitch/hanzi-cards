@@ -7,7 +7,7 @@ import vm from 'node:vm';
 import { gunzipSync } from 'node:zlib';
 import { validateBackup, mergeSyncRecords, syncPayload, openLibrary, snapshot, saveReview, addWord } from '../docs/storage.mjs';
 import { syncGitHub } from '../docs/sync.mjs';
-import { withContext, pinyinChoices, checkAnswer, clozeSentence, studyQueue, studySchedule } from '../docs/study.mjs';
+import { withContext, pinyinChoices, checkAnswer, clozeSentence, mistakeQueue, studyQueue, studySchedule } from '../docs/study.mjs';
 import { advancedExamples } from '../docs/advanced-examples.mjs';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const catalog=JSON.parse(readFileSync(resolve(root,'docs/data/catalog.json'),'utf8'));
@@ -35,7 +35,7 @@ test('service worker precaches every required file and serves cached assets offl
 });
 test('manifest uses project-relative URLs and includes iPhone installation metadata',()=>{
   const manifest=JSON.parse(readFileSync(resolve(root,'docs/manifest.webmanifest'),'utf8'));
-  assert.equal(manifest.start_url,'./listen.html');assert.equal(manifest.id,'./');assert.equal(manifest.scope,'./');assert.equal(manifest.display,'standalone');
+  assert.equal(manifest.start_url,'./mistakes.html');assert.equal(manifest.id,'./');assert.equal(manifest.scope,'./');assert.equal(manifest.display,'standalone');
   for(const icon of manifest.icons)assert.ok(existsSync(resolve(root,'docs',icon.src)));
   const html=readFileSync(resolve(root,'docs/index.html'),'utf8');assert.ok(html.includes('apple-touch-icon'));assert.ok(html.includes('viewport-fit=cover'));
 });
@@ -61,6 +61,17 @@ test('advanced English examples include Russian translations and gap-fill on all
     assert.ok(clozeSentence(card),word.text);
     assert.match(card.sentenceTranslation,/\p{Script=Cyrillic}/u);
   }
+});
+
+test('mistake practice includes Poor and graded incorrect answers, even for cards due later',()=>{
+  const cards=words.slice(0,3).map(word=>({...word,due:Date.now()+86_400_000}));
+  const [first,second,third]=cards.map(card=>card.id);
+  const reviews=[{wordId:first,rating:'Again',reviewedAt:1},{wordId:first,rating:'Good',mistake:true,reviewedAt:2},
+    {wordId:second,rating:'Good',mistake:true,reviewedAt:3},{wordId:third,rating:'Good',reviewedAt:4}];
+  assert.deepEqual(mistakeQueue(cards,reviews,new Set()).map(card=>card.id),[first,second]);
+  assert.deepEqual(mistakeQueue(cards,reviews,new Set([first])).map(card=>card.id),[second]);
+  assert.deepEqual(mistakeQueue(cards.slice(2),reviews,new Set()),[]);
+  assert.equal(reviews.length,4);
 });
 
 test('GitHub sync encrypts and merges reviews and custom cards from two devices', async t => {
@@ -146,7 +157,7 @@ test('daily limit applies to first attempts only and the study state survives re
   await openLibrary(bank);
   const now=new Date(2026,10,6,12).getTime();
   const fresh=id=>({id,due:0,repetitions:0});
-  await saveReview(fresh(bank[0].id),'Again',now,1);
+  await saveReview(fresh(bank[0].id),'Again',now,1,true);
   await assert.rejects(saveReview(fresh(bank[1].id),'Good',now,1),/limit/);
   const state=await snapshot();
   const cards=bank.map((word,i)=>({...word,...state.progress[i]}));
@@ -157,6 +168,7 @@ test('daily limit applies to first attempts only and the study state survives re
   await openLibrary(bank);
   const reopened=await snapshot();
   assert.equal(reopened.reviews.length,1);
+  assert.equal(syncPayload(reopened).reviews[0].mistake,true);
   assert.equal(reopened.progress[0].status,'learning');
   assert.equal(reopened.progress.find(p=>p.wordId===oldCard.id).due,100);
   assert.ok(reopened.words.some(word=>word.id==='custom-persistence'));

@@ -97,3 +97,18 @@ export function studyQueue(cards, reviews, limit, now = Date.now()) {
   const remaining = Math.max(0, limit - startedToday);
   return {queue:[...due,...fresh.slice(0,remaining)], limited:fresh.length > remaining};
 }
+
+export function mistakeQueue(cards,reviews,completed) {
+  const scores=new Map();
+  for(const review of reviews){
+    if(review.rating!=='Again'&&review.mistake!==true)continue;
+    const score=scores.get(review.wordId)??{count:0,last:0};
+    score.count++;
+    score.last=Math.max(score.last,review.reviewedAt);
+    scores.set(review.wordId,score);
+  }
+  return cards.filter(card=>scores.has(card.id)&&!completed.has(card.id)).sort((a,b)=>{
+    const first=scores.get(a.id),second=scores.get(b.id);
+    return second.count-first.count||second.last-first.last||a.id.localeCompare(b.id);
+  });
+}

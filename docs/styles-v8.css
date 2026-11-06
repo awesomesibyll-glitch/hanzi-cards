@@ -42,3 +42,7 @@ textarea { width: 100%; border: 1px solid var(--line); border-radius: 8px; paddi
   .header-actions { width: 100%; justify-content: space-between; gap: 4px; }
   .header-actions .text-button { font-size: 12px; }
 }
+#mistake-bar { display:flex; flex-wrap:wrap; gap:8px 14px; align-items:center; margin:0 0 18px; }
+#mistake-status { font-size:12px; color:var(--muted); }
+#mistakes[aria-pressed="true"] { background:var(--practice-bg); }
+#mistakes, #skip-practice { min-height:44px; }
