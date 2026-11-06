@@ -4,7 +4,7 @@
   "short_name": "Hanzi Cards",
   "description": "Offline Chinese and English flashcards, handwriting and optional GitHub sync",
   "lang": "en",
-  "start_url": "./pronunciation.html",
+  "start_url": "./listen.html",
   "scope": "./",
   "display": "standalone",
   "background_color": "#f7f8f2",

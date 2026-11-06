@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
-import { voiceScore } from '../web/audio.mjs';
+import { playAudio, voiceScore } from '../web/audio.mjs';
 import { englishRecording, isAudioClip } from '../web/recordings.mjs';
 const catalog=JSON.parse(readFileSync(new URL('../web/data/catalog.json',import.meta.url),'utf8'));
 const load=name=>JSON.parse(gunzipSync(Buffer.concat(catalog.packs[name].map(file=>readFileSync(new URL('../web/data/'+file,import.meta.url))))).toString('utf8'));
@@ -35,4 +35,27 @@ test('UK and US pronunciation never substitute recordings from another or unknow
 test('accepts Wikimedia’s application/ogg only when it is an Ogg file',async()=>{
   assert.equal(await isAudioClip(new Blob(['OggS...'],{type:'application/ogg'})),true);
   assert.equal(await isAudioClip(new Blob(['<html>'],{type:'application/ogg'})),false);
+});
+test('mobile playback starts fallback speech during the tap while the recording is pending',async t=>{
+  const descriptor=name=>Object.getOwnPropertyDescriptor(globalThis,name);
+  const mock=(name,value)=>{
+    const previous=descriptor(name);
+    Object.defineProperty(globalThis,name,{configurable:true,value});
+    t.after(()=>{if(previous)Object.defineProperty(globalThis,name,previous);else delete globalThis[name];});
+  };
+  let inTap=true,spoken;
+  const synth={
+    getVoices:()=>[{lang:'zh-CN',name:'Mandarin',localService:true,voiceURI:'mandarin'}],
+    speak(utterance){assert.equal(inTap,true);spoken=utterance;utterance.onstart();}
+  };
+  const Utterance=class{constructor(text){this.text=text;}};
+  mock('window',{speechSynthesis:synth,SpeechSynthesisUtterance:Utterance,AudioContext:class{}});
+  mock('SpeechSynthesisUtterance',Utterance);
+  mock('location',{href:'https://example.test/app/'});
+  mock('caches',{open:()=>new Promise(()=>{})});
+  const result=playAudio('你','zh-CN',()=>{}, {word:true,reading:'nǐ'});
+  inTap=false;
+  await result;
+  assert.equal(spoken.text,'你');
+  assert.equal(spoken.lang,'zh-CN');
 });

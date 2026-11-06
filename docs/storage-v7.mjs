@@ -1,4 +1,4 @@
-import { studyQueue, studySchedule, withContext } from './study-v6.mjs';
+import { studyQueue, studySchedule, withContext } from './study-v7.mjs';
 export const RATINGS = ['Again', 'Hard', 'Good', 'Easy'];
 export const STORAGE_KEY = 'hanzi-study-v4';
 let catalog;

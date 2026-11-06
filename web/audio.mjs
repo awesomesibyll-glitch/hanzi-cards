@@ -27,53 +27,93 @@ export function englishAccent(value) {
   return audioPreference('english-accent')==='en-GB'?'en-GB':'en-US';
 }
 
-let generation=0,context,source,current;
+let generation=0,context,source,current,prepared;
 export function stopAudio() {
   generation++;
   if(source){try{source.stop();}catch{}source=null;}
   current=null;
-  window.speechSynthesis?.cancel();
+  const synth=window.speechSynthesis;
+  if(synth?.speaking||synth?.pending)synth.cancel();
 }
 
-function systemSpeech(text,language,notify) {
+function systemSpeech(text,language,notify,{quiet=false}={}) {
   const synth=window.speechSynthesis;
   if (!synth || !window.SpeechSynthesisUtterance) {
-    notify('This browser does not offer system speech. Try Safari, Chrome or Edge.');
-    return;
+    if(!quiet)notify('This browser does not offer system speech. Open Hanzi Cards in Safari or Chrome.');
+    return false;
   }
   const voiceList=availableVoices(language);
   const saved=audioPreference('voice-'+language);
   const chosen=voiceList.find(voice=>voice.voiceURI===saved) ?? voiceList[0];
   const warning=`No on-device ${language} voice is available. Install a voice for this language in your device’s speech settings.`;
-  if (!chosen && synth.getVoices().length) { notify(warning); return; }
+  if (!chosen && synth.getVoices().length) { if(!quiet)notify(warning); return false; }
   const utterance=new SpeechSynthesisUtterance(text);
   current=utterance;
   utterance.lang=language;
   if (chosen) utterance.voice=chosen;
   utterance.rate=Number(audioPreference('speech-rate') || '1');
+  const blocked='The browser could not start speech. Tap the speaker again or check the voice in Audio settings.';
+  const watchdog=setTimeout(()=>{if(current===utterance)notify(blocked);},4000);
+  utterance.onstart=()=>{clearTimeout(watchdog);if(current===utterance)notify('');};
+  utterance.onend=()=>clearTimeout(watchdog);
   utterance.onerror=event=>{
-    if (current===utterance && !['canceled','interrupted'].includes(event.error)) notify(warning);
+    clearTimeout(watchdog);
+    if (current===utterance && !['canceled','interrupted'].includes(event.error))notify(event.error==='not-allowed'?blocked:warning);
   };
-  notify(chosen ? '' : 'The voice list is still unavailable. Trying your device’s default voice for this language.');
-  synth.speak(utterance);
+  try { synth.speak(utterance);return true; }
+  catch { clearTimeout(watchdog);if(!quiet)notify(blocked);return false; }
 }
 
+const playbackLanguage=language=>language.startsWith('en-')?englishAccent():language;
+function recordingEngine(language){
+  return audioPreference('recording-mode')!=='system'&&['en-US','en-GB','zh-CN'].includes(language)
+    ? window.AudioContext??window.webkitAudioContext : undefined;
+}
+
+export function prepareWordAudio(text,language,reading){
+  language=playbackLanguage(language);
+  if(!recordingEngine(language))return null;
+  const key=JSON.stringify([text,language,reading]);
+  if(prepared?.key===key)return prepared;
+  const entry={key,settled:false,recording:null};
+  entry.ready=loadRecording(text,language,reading).then(async recording=>{
+    const Decoder=window.OfflineAudioContext??window.webkitOfflineAudioContext;
+    if(recording&&Decoder){
+      try{entry.buffer=await new Decoder(1,1,44100).decodeAudioData(await recording.blob.arrayBuffer());}
+      catch{return null;}
+    }
+    return recording;
+  }).then(recording=>{
+    entry.settled=true;entry.recording=recording;return recording;
+  });
+  prepared=entry;
+  return entry;
+}
 
 export async function playAudio(text,language,notify,{word=false,reading,credit=()=>{}}={}){
   stopAudio();credit(null);
-  if(language.startsWith('en-'))language=englishAccent();
-  const AudioEngine=window.AudioContext??window.webkitAudioContext;
-  if(!word||!AudioEngine||audioPreference('recording-mode')==='system'||!['en-US','en-GB','zh-CN'].includes(language)){
+  language=playbackLanguage(language);
+  const AudioEngine=word&&recordingEngine(language);
+  if(!AudioEngine){
     systemSpeech(text,language,notify);return;
   }
+  const entry=prepareWordAudio(text,language,reading);
+  if(entry.settled&&!entry.recording){systemSpeech(text,language,notify);return;}
+
+  // Start system speech inside the tap if the download is still pending.
+  // Never wait for the network and then call speechSynthesis.speak on iOS.
+  if(!entry.recording&&systemSpeech(text,language,notify,{quiet:true}))return;
+  notify('Loading pronunciation…');
   const ticket=generation;
   try{
-    context??=new AudioEngine();
-    const resume=Promise.race([context.resume(),new Promise((_,reject)=>setTimeout(()=>reject(new Error('Playback needs a tap.')),1200))]);
-    const [recording]=await Promise.all([loadRecording(text,language,reading),resume]);
+    if(!context||context.state==='closed')context=new AudioEngine();
+    let timeout;
+    const resume=Promise.race([context.resume(),new Promise((_,reject)=>{timeout=setTimeout(()=>reject(new Error('Playback needs a tap.')),1200);})])
+      .finally(()=>clearTimeout(timeout));
+    const [recording]=await Promise.all([entry.ready,resume]);
     if(ticket!==generation)return;
     if(recording){
-      const buffer=await context.decodeAudioData(await recording.blob.arrayBuffer());
+      const buffer=entry.buffer??await context.decodeAudioData(await recording.blob.arrayBuffer());
       if(ticket!==generation)return;
       source=context.createBufferSource();
       source.buffer=buffer;
@@ -82,6 +122,11 @@ export async function playAudio(text,language,notify,{word=false,reading,credit=
       source.start();
       notify('');credit(recording);return;
     }
-  }catch{}
-  if(ticket===generation)systemSpeech(text,language,notify);
+    notify(`No recording or on-device ${language} voice is available. Download the matching voice in your phone’s speech settings.`);
+  }catch{
+    if(ticket!==generation)return;
+    // The next tap can invoke system speech synchronously if decoding fails.
+    if(context?.state==='running'&&entry.recording)entry.recording=null;
+    notify('This recording could not play. Tap the speaker again to retry or use the system voice.');
+  }
 }
