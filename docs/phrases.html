@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#edf6fc">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Hanzi Cards">
+  <meta name="description" content="Your quiet daily practice. Chinese flashcards, pronunciation and handwriting, available offline.">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="apple-touch-icon" sizes="180x180" href="./icons/wen-touch.png">
+  <link rel="icon" href="./icons/wen.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles-v22.css">
+  <title>Hanzi Cards</title>
+</head>
+<body>
+  <div class="app">
+    <header class="app-header">
+      <a class="brand" href="./" aria-label="Hanzi Cards home"><img class="brand-icon" src="./icons/wen.svg" alt=""><span>Hanzi Cards</span></a>
+      <button id="open-menu" class="menu-trigger" aria-haspopup="dialog"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 8h14M5 12h14M5 16h14"/></svg> Menu</button>
+    </header>
+    <main>
+      <nav class="deck-tabs" role="tablist" aria-label="Language course"><button id="deck-zh" role="tab" class="active"><span>Chinese</span><small>→ English</small></button><button id="deck-en" role="tab"><span>English</span><small>→ Russian</small></button></nav>
+      <div class="study-heading"><h1 id="study-title">Today</h1><p><strong id="due-count">—</strong> <span id="due-label">left to study</span></p></div>
+      <div id="mistake-bar" hidden><button id="leave-mistakes" class="text-button">Back to regular study</button></div>
+      <div id="active-set" class="active-set" hidden><span id="active-set-name"></span><button id="leave-set" class="text-button">Exit set</button></div>
+      <div id="notice" role="status" aria-live="polite" hidden></div>
+      <button id="quick-search" class="text-button">Search words · add to study</button>
+      <div class="toolbar"><label>Level<select id="level"><option value="0">All levels</option></select></label><label>Topic<select id="topic"><option value="">All topics</option></select></label></div>
+      <section id="study" aria-label="Study card">
+        <article class="flashcard" id="card" hidden>
+          <div class="card-top"><span id="card-category" class="eyebrow">CHINESE → ENGLISH</span><span id="card-status" class="pill">NEW WORD</span></div>
+          <button id="play-zh" class="sound" aria-label="Play Chinese pronunciation"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 10v4h4l5 4V6l-5 4H4Zm12-1a4 4 0 0 1 0 6m2.5-8a7 7 0 0 1 0 10"/></svg></button>
+          <div id="word" lang="zh-CN">你好</div><p id="card-prompt"></p>
+          <form id="recall-form" hidden><label>Type your answer<input id="recall-input" required maxlength="160" autocomplete="off" autocapitalize="off" spellcheck="false" aria-describedby="recall-feedback"></label><button class="primary wide">Check answer</button></form>
+          <p id="recall-feedback" role="status" hidden></p>
+          <button id="skip-practice" class="text-button" hidden>Show answer</button>
+          <div id="answer" hidden><p id="reading" lang="zh-Latn"></p><h2 id="translation"></h2><button id="play-en" class="text-button">Listen in English ↗</button>
+            <div class="context-box"><div class="context-heading"><span class="eyebrow" id="context-label">IN CONTEXT</span><button id="play-sentence" class="secondary" aria-label="Play context sentence"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 10v4h4l5 4V6l-5 4H4Zm12-1a4 4 0 0 1 0 6m2.5-8a7 7 0 0 1 0 10"/></svg></button></div><p id="sentence"></p><p id="sentence-translation"></p></div>
+          </div>
+          <button id="reveal" class="primary wide">Reveal answer</button>
+          <button id="next-practice" class="primary wide" hidden>Next practice card</button>
+          <p id="card-audio-status" class="audio-credit" role="status"></p><p id="recording-credit" class="audio-credit" hidden></p><div id="ratings" hidden><p>How well did you remember?</p><div class="rating-grid"></div></div>
+          <button id="mark-known" class="text-button wide">I already know this</button>
+          <button id="edit-current-word" class="text-button wide">Edit word / report a mistake</button>
+          <button id="link-confusion" class="text-button wide">I mix this up with…</button>
+        </article>
+        <div id="empty" class="empty" hidden><h2>All caught up</h2><p id="next-due">You're all caught up in this selection.</p><button id="refresh" class="primary">Check again</button></div>
+      </section>
+      <details id="writing" class="writing-section" hidden><summary>Handwriting</summary><div class="section-heading"><h2>Stroke order</h2><div id="characters" aria-label="Choose a character"></div></div><div class="writing-layout"><div id="writing-pad"><svg id="canvas" viewBox="0 0 1024 1024" role="img" aria-label="Handwriting canvas. Trace the character with your finger."><path d="M0 512H1024M512 0V1024M0 0L1024 1024M1024 0L0 1024" class="grid-lines"/><g id="glyph" transform="translate(0,900) scale(1,-1)"><g id="outlines"></g><polyline id="ink" fill="none" stroke="var(--accent)" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/></g></svg></div><div class="writing-info"><span id="stroke-counter" class="pill">STROKE 1</span><p id="writing-message" aria-live="polite">Start with the first stroke. Follow its direction.</p><button id="animate" class="secondary">▶ Watch stroke order</button><button id="clear" class="text-button">↺ Clear & try again</button></div></div></details>
+    </main>
+  </div>
+  <dialog id="menu-dialog" aria-labelledby="menu-title">
+    <form method="dialog"><button class="dialog-close" aria-label="Close menu">×</button></form>
+    <h2 id="menu-title">Menu</h2>
+    <div class="menu-stats"><p><strong id="today-count">—</strong> reviews today</p><p><strong id="library-count">—</strong> words in this course</p></div>
+    <section class="menu-group" aria-label="Study">
+      <h3>Study</h3>
+      <button id="study-settings" class="menu-item">Study settings</button>
+      <button id="audio-settings" class="menu-item">Audio</button>
+      <button id="mistakes" class="menu-item" aria-pressed="false">Practise my mistakes</button>
+      <button id="open-reading" class="menu-item">Mini texts</button>
+      <button id="open-pairs" class="menu-item">Words I mix up</button>
+    </section>
+    <section class="menu-group" aria-label="Library and data">
+      <h3>Library &amp; data</h3>
+      <button id="open-library" class="menu-item">Search &amp; study sets</button>
+      <button id="open-import" class="menu-item">Import word list</button>
+      <button id="add-word" class="menu-item">Add a word</button>
+      <button id="open-sync" class="menu-item">GitHub Sync</button>
+      <button id="backup" class="menu-item">Export backup</button>
+      <button id="choose-restore" class="menu-item">Restore backup</button>
+      <input id="restore" type="file" accept="application/json,.json" hidden>
+    </section>
+    <section class="menu-group" aria-label="Help">
+      <h3>Support</h3>
+      <button id="help" class="menu-item">Help &amp; installation</button>
+      <p id="connection" class="connection-status" role="status">Preparing offline access…</p>
+    </section>
+  </dialog>
+<dialog id="edit-word-dialog" aria-labelledby="edit-word-title"><form method="dialog"><button class="dialog-close" aria-label="Close word editor">×</button></form><h2 id="edit-word-title"></h2><p>Your correction applies on this device and is included in backups and GitHub Sync. Your review history stays intact.</p><form id="edit-word-form"><label><span id="edit-reading-label">Pinyin with tones</span><input id="edit-reading" required maxlength="120"></label><label>Translation<input id="edit-translation" required maxlength="500"></label><label>Example sentence<textarea id="edit-sentence" required maxlength="700" rows="2"></textarea></label><label>Example translation<textarea id="edit-sentenceTranslation" required maxlength="700" rows="2"></textarea></label><button id="edit-save" class="primary wide">Save correction</button><button id="edit-reset" type="button" class="text-button wide">Restore dictionary version</button><p id="edit-word-status" role="status"></p></form></dialog>
+  <dialog id="pairs-dialog" aria-labelledby="pairs-title">
+    <form method="dialog"><button class="dialog-close" aria-label="Close word pairs">×</button></form>
+    <h2 id="pairs-title">Words I mix up</h2>
+    <div id="pair-editor">
+      <label>Course<select id="pair-course"><option value="zh">Chinese → English</option><option value="en">English → Russian</option></select></label>
+      <h3>Your pairs</h3><ul id="saved-pairs"></ul><p id="no-pairs">No pairs yet. Choose a suggestion or find two words below.</p>
+      <button id="start-pair-practice" class="primary wide" disabled>Practise my pairs</button>
+      <p id="pair-practice-help" hidden>Practice needs two words with different translations. Pairs containing words marked as known are excluded.</p>
+      <section id="pair-suggestions"><h3>Try a comparison</h3><div id="suggested-pairs"></div></section>
+      <form id="pair-form">
+        <label>First word<input id="pair-query-0" type="search" autocomplete="off" spellcheck="false" placeholder="Hanzi, pinyin or translation"></label><ul id="pair-results-0" class="pair-search-results"></ul>
+        <label>Second word<input id="pair-query-1" type="search" autocomplete="off" spellcheck="false" placeholder="Find the word you mix it up with"></label><ul id="pair-results-1" class="pair-search-results"></ul>
+        <label>How I tell them apart<textarea id="pair-note" maxlength="500" rows="2" placeholder="Optional note to help you remember"></textarea></label>
+        <div class="form-row"><button id="save-pair" class="primary" disabled>Save pair</button><button id="clear-pair-editor" type="button" class="text-button">New pair</button></div>
+      </form>
+      <div id="pair-preview"></div>
+    </div>
+    <div id="pair-practice" hidden>
+      <button id="exit-pair-practice" class="text-button">← My pairs</button>
+      <p id="pair-trial-counter" class="eyebrow"></p><p id="pair-practice-instruction">Choose the word that matches this meaning.</p>
+      <h3 id="pair-trial-prompt"></h3><div id="pair-trial-choices"></div>
+      <p id="pair-trial-feedback" role="status" aria-live="polite"></p>
+      <button id="next-pair-trial" class="primary wide" hidden>Next</button><div id="pair-trial-answer"></div>
+      <p>Extra practice keeps your review schedule and daily new-word allowance unchanged.</p>
+    </div>
+    <p id="pair-status" role="status" aria-live="polite"></p>
+  </dialog>
+  <dialog id="reading-dialog" aria-labelledby="reading-title">
+    <form method="dialog"><button class="dialog-close" aria-label="Close mini texts">×</button></form>
+    <h2 id="reading-title">Mini texts</h2><button id="study-phrases" class="secondary wide">Study favourite phrases</button>
+    <div id="reading-picker">
+      <div class="form-row"><label>Course<select id="reading-course"><option value="zh">Chinese → English</option><option value="en">English → Russian</option></select></label><label>Reading level<select id="reading-level"></select></label></div>
+      <p>Start with the most familiar vocabulary, based on your card reviews. Reading levels are approximate.</p>
+      <ul id="reading-list"></ul><p id="reading-empty" hidden>More texts at this level are coming. Choose All levels to see the available dialogues.</p>
+    </div>
+    <div id="reading-detail" hidden>
+      <button id="reading-back" class="text-button">← All texts</button>
+      <h3 id="reading-story-title"></h3><p id="reading-story-meta"></p>
+      <p>Tap an underlined word for its meaning<span> and, in Chinese, its pinyin</span>.</p>
+      <div id="reading-lines"></div>
+      <section id="reading-word-panel" aria-label="Selected word" hidden>
+        <div class="reading-word-heading"><strong id="reading-word"></strong><button id="reading-listen-word" class="secondary" aria-label="Listen to selected word">Listen</button></div>
+        <p id="reading-pinyin"></p><p id="reading-meaning" aria-live="polite"></p>
+        <label>Save to study set<select id="reading-set"></select></label>
+        <button id="reading-add" class="primary wide" disabled>Add word to set</button>
+      </section>
+      <details class="reading-create-section"><summary>Create a study set</summary><form id="reading-create"><label>Set name<input id="reading-set-name" maxlength="60" required placeholder="Words from reading"></label><button id="reading-create-button" class="secondary">Create set</button></form></details>
+    </div>
+    <p id="reading-status" role="status" aria-live="polite"></p>
+  </dialog>
+  <dialog id="library-dialog" aria-labelledby="library-title">
+    <form method="dialog"><button class="dialog-close" aria-label="Close search and study sets">×</button></form>
+    <h2 id="library-title">Search &amp; study sets</h2>
+    <label>Course<select id="library-course"><option value="zh">Chinese → English</option><option value="en">English → Russian</option></select></label>
+    <label>Search words<input id="library-query" type="search" placeholder="Hanzi, pinyin or translation" autocomplete="off" spellcheck="false"></label>
+    <label>Word status<select id="library-status-filter"><option value="all">All words</option><option value="learning">To learn</option><option value="known">Already known</option></select></label>
+    <details class="known-help"><summary>About known words</summary><p>Mark words you already know to exclude them from every study mode, both directions and your daily count. This does not add a review or use a new-word slot. Choose Already known and Learn again to bring them back. Your previous review history is kept.</p></details>
+    <form id="create-set"><label>New set name<input id="set-name" maxlength="60" required placeholder="Travel"></label><button class="secondary">Create set</button></form>
+    <label>Study set<select id="library-set"></select></label>
+    <div id="set-actions" class="set-actions" hidden>
+      <button id="study-set" class="primary">Study this set</button><button id="delete-set" class="text-button">Delete set</button>
+      <label><input id="set-only" type="checkbox"> Show words in this set</label>
+    </div>
+    <p id="library-status" role="status"></p>
+    <p id="search-count" role="status"></p>
+    <section class="bulk-word-tools" aria-label="Select multiple words">
+      <div class="bulk-selection-heading"><label><input id="select-visible-words" type="checkbox"> Select visible words</label><span id="selected-word-count" role="status">0 selected</span></div>
+      <div id="bulk-word-actions" hidden><button id="bulk-add-study" class="primary wide">Add selected to study</button><div class="bulk-word-buttons"><button id="bulk-mark-known" class="primary">Mark selected as known</button><button id="bulk-learn-again" class="secondary">Learn selected again</button></div><button id="clear-word-selection" class="text-button">Clear selection</button></div>
+    </section>
+    <ul id="search-results"></ul>
+    <button id="more-results" class="secondary wide" hidden>Show more results</button>
+  </dialog>
+  <dialog id="import-dialog" aria-labelledby="import-title">
+    <form method="dialog"><button class="dialog-close" aria-label="Close import">×</button></form>
+    <h2 id="import-title">Import word list</h2>
+    <div class="form-row">
+      <label>Course<select id="import-course"><option value="zh">Chinese → English</option><option value="en">English → Russian</option></select></label>
+      <label>Add to<select id="import-set"></select></label>
+    </div>
+    <p>Copy cells from Excel or Google Sheets, then paste them here. Use <strong>Word, Translation, Pinyin or IPA, Sentence, Sentence translation, Level, Topic</strong> in that order, or include a header row. Chinese needs pinyin. Example and translation may be left blank together.</p>
+    <label>Spreadsheet rows<textarea id="import-text" rows="5" placeholder="Paste cells here" spellcheck="false"></textarea></label>
+    <div class="import-actions"><button id="preview-import" class="secondary">Preview</button><button id="confirm-import" class="primary" disabled>Import cards</button></div>
+    <p id="import-status" role="status"></p>
+    <ol id="import-preview"></ol>
+  </dialog>
+  <dialog id="help-dialog"><form method="dialog"><button class="dialog-close" aria-label="Close help">×</button><span class="eyebrow">TAKE YOUR PRACTICE WITH YOU</span><h2>Install Hanzi Cards</h2><h3>Windows</h3><p>In Microsoft Edge, open the <strong>…</strong> menu and choose <strong>More tools → Apps → Install this site as an app</strong>.</p><button type="button" id="install-desktop" class="secondary" hidden>Install app</button><h3>iPhone</h3><p>In Safari, tap <strong>Share → Add to Home Screen</strong>. Keep <strong>Open as Web App</strong> enabled if shown, then tap <strong>Add</strong>.</p><p id="installed-status" role="status"></p><h3>Ready for offline study</h3><p>Wait for “Ready offline” before disconnecting. Use <strong>GitHub Sync</strong> online to merge reviews and custom cards across devices. Safari and the Home Screen app may use separate storage.</p><h3>About the courses</h3><p>Chinese uses HSK 3.0 (2021). English uses community CEFR levels. English translations and levels were AI-generated and may contain errors. <a href="./THIRD_PARTY_NOTICES.md" target="_blank" rel="noopener">View vocabulary sources</a>.</p><h3>Pronunciation</h3><p>Choose a voice and speed in Audio settings. Download the corresponding system voice for offline playback.</p><button class="primary wide">Got it</button></form></dialog>
+  <dialog id="sync-dialog" aria-labelledby="sync-title">
+    <button id="close-sync" class="dialog-close" aria-label="Close GitHub Sync">×</button>
+    <span class="eyebrow">STUDY ACROSS DEVICES</span>
+    <h2 id="sync-title">GitHub Sync</h2>
+    <p>Merge your reviews and custom cards with an encrypted GitHub Gist. Sync online before switching devices.</p>
+    <form id="sync-form" autocomplete="off">
+      <label>GitHub token<input id="sync-token" type="password" required maxlength="255" autocomplete="off" spellcheck="false"></label>
+      <p><a href="https://github.com/settings/tokens?type=beta" target="_blank" rel="noopener noreferrer">Create a GitHub token</a> with <strong>Gists: Read and write</strong> under account permissions. Repository access is unnecessary.</p>
+      <label>Sync password<input id="sync-password" type="password" required minlength="12" maxlength="256" autocomplete="off" aria-describedby="sync-password-help"></label>
+      <p id="sync-password-help">Choose a strong password of at least 12 characters. Use the same password on each device. The app keeps the token and password only while this window is open.</p>
+      <label>Sync ID<input id="sync-id" maxlength="40" autocapitalize="off" spellcheck="false" placeholder="Leave blank on the first device"></label>
+      <p>On the first device, leave the ID blank to create it. On other devices, paste that ID and use a token from the same GitHub account.</p>
+      <div class="sync-actions"><button type="submit" id="sync-submit" class="primary">Sync now</button><button type="button" id="copy-sync-id" class="secondary">Copy Sync ID</button></div>
+      <p id="sync-status" role="status" aria-live="polite"></p>
+    </form>
+  </dialog>
+  <dialog id="add-dialog"><form id="word-form"><button type="button" class="dialog-close" id="close-add" aria-label="Close new word">×</button><span class="eyebrow">BUILD YOUR LIBRARY</span><h2>One word at a time.</h2><label><span id="source-word-label">Chinese word</span><input name="text" required maxlength="32" lang="zh-CN" placeholder="你好"></label><label><span id="reading-label">Pinyin with tones</span><input name="reading" required maxlength="120" placeholder="nǐ hǎo" autocomplete="off" autocapitalize="off" spellcheck="false" aria-describedby="pinyin-help"></label><div id="pinyin-panel" hidden><p id="pinyin-help">Type pinyin and tap a match.</p><div id="pinyin-choices" role="group" aria-label="Hanzi suggestions"></div></div><label><span id="translation-label">English translation</span><input name="translation" required maxlength="250" placeholder="hello"></label><label>Context sentence<textarea name="sentence" rows="2" required maxlength="500"></textarea></label><label>Sentence translation<textarea name="sentenceTranslation" rows="2" required maxlength="500"></textarea></label><div class="form-row"><label><span id="add-level-label">HSK level</span><select name="level"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option></select></label><label>Topic<input name="topic" required maxlength="60" value="My words"></label></div><button class="primary wide" type="submit">Save word</button></form></dialog>
+  <dialog id="audio-dialog"><button id="close-audio" class="dialog-close" aria-label="Close audio settings">×</button><span class="eyebrow">PRONUNCIATION</span><h2>Audio</h2><label class="audio-setting"><input id="auto-audio" type="checkbox"> Play words automatically</label><label>English accent<select id="english-accent"><option value="en-US">American English (US)</option><option value="en-GB">British English (UK)</option></select></label><label>Word pronunciation<select id="recording-mode"><option value="prefer">Prefer human recordings when available</option><option value="system">System voices only (offline)</option></select></label><p>Human recordings are prepared for the current visible word and cached for offline replay. If a recording is unavailable, words and sentences use a matching voice on this device.</p><label>Chinese system voice<select id="voice-zh-CN"></select></label><label>English system voice<select id="voice-en-US"></select></label><label>Russian system voice<select id="voice-ru-RU"></select></label><label>Speed <output id="rate-value">1×</output><input id="speech-rate" type="range" min="0.7" max="1.2" step="0.05" value="1"></label><p>For better Chinese speech, download an Enhanced/Premium Mandarin voice in iPhone Settings → Accessibility → speech/reading settings, then reopen this app. Only voices exposed by Safari can be selected.</p><button id="test-voice" class="primary wide">Play current word</button><p id="audio-preview-status" role="status"></p></dialog>
+  <dialog id="study-dialog"><form method="dialog" id="study-form"><button type="button" class="dialog-close" id="close-study" aria-label="Close study settings">×</button><span class="eyebrow">MAKE IT YOURS</span><h2>Study settings</h2><fieldset class="mode-options"><legend>Card types · choose one or more</legend><label><input type="checkbox" name="study-modes" value="classic"> Classic flashcards</label><label><input type="checkbox" name="study-modes" value="recall"> Type the answer</label><label><input type="checkbox" name="study-modes" value="reverse-classic"> Reverse flashcards</label><label><input type="checkbox" name="study-modes" value="reverse-recall"> Reverse · type the answer</label><label><input type="checkbox" name="study-modes" value="cloze"> Fill the gap</label><label><input type="checkbox" name="study-modes" value="listen-word"> Dictation · word</label><label><input type="checkbox" name="study-modes" value="listen-sentence"> Dictation · sentence</label><label><input type="checkbox" name="study-modes" value="listen-tones"> Dictation · pinyin tones</label></fieldset><p id="mode-error" role="status"></p><label>New words per day<select id="daily-limit"><option value="10">10</option><option value="20">20</option><option value="50">50</option></select></label><p>Selected types alternate during study. Types with no eligible cards are skipped. For English, pinyin-only selection uses word dictation. Dictation hides the answer until you check it. Pinyin tones apply to Chinese. Reverse cards show the translation first and have a separate schedule. The new-word limit is shared across courses and directions. Reviews of previously studied cards always remain available.</p><button class="primary wide">Save settings</button></form></dialog>
+  <noscript>This study app needs JavaScript enabled to save and review cards.</noscript>
+  <script type="module" src="./app-v23.mjs"></script>
+</body></html>

@@ -1,12 +1,12 @@
 import { mountWordEditor } from './word-edits.mjs';
 import { matchesStroke } from './modules/strokes.mjs';
-import { openLibrary, snapshot, saveReview, saveQuickRefresh, setWordsKnown, setConfusion, saveWordEdit, addToStudy, addWord, importWords, createSet, setMembership, deleteSet, restoreBackup, validateBackup, mergeSync, syncPayload, STORAGE_KEY } from './storage-v22.mjs';
+import { openLibrary, snapshot, saveReview, saveQuickRefresh, setWordsKnown, setConfusion, saveWordEdit, addToStudy, saveFavouritePhrase, addWord, importWords, createSet, setMembership, deleteSet, restoreBackup, validateBackup, mergeSync, syncPayload, STORAGE_KEY } from './storage-v23.mjs';
 import { playAudio, stopAudio, audioPreference, availableVoices, englishAccent, prepareWordAudio } from './audio-v12.mjs';
-import { checkAnswer, checkDictation, clozeSentence, mistakeQueue, pinyinChoices, quickRefresh, resumableCard, studyQueue, studySchedule } from './study-v16.mjs';
+import { checkAnswer, checkDictation, clozeSentence, mistakeQueue, pinyinChoices, quickRefresh, resumableCard, studyQueue, studySchedule } from './study-v23.mjs';
 import { syncGitHub } from './sync.mjs';
 import { findWords, indexWords, wordsInSet } from './library.mjs';
 import { previewImport } from './import-list.mjs';
-import { mountReading } from './reading-v22.mjs';
+import { mountReading } from './reading-v23.mjs';
 import { knownWordIds } from './known.mjs';
 import { mountConfusions } from './confusions-v22.mjs';
 import { parseModes, availableModes } from './modes.mjs';
@@ -32,8 +32,9 @@ function recordingCredit(recording){
   const link=(text,url)=>{const a=document.createElement('a');a.textContent=text;a.href=url;a.target='_blank';a.rel='noopener noreferrer';return a;};
   note.append('Human recording · ',link(recording.artist||'Recording and contributor',recording.source),' · ',link('Creative Commons license',recording.license));
 }
+function prepareCardAudio(){if(card&&card.cardKind!=='phrase')prepareWordAudio(card.text,card.sourceLanguage,card.reading);}
 function speakWord(notifyPlayback=audioStatus){
-  if(card)void playAudio(card.text,card.sourceLanguage,notifyPlayback,{word:true,reading:card.reading,credit:recordingCredit});
+  if(card)void playAudio(card.text,card.sourceLanguage,notifyPlayback,{word:card.cardKind!=='phrase',reading:card.reading,credit:recordingCredit});
 }
 const selectedModes=()=>parseModes(safePreference('hanzi-study-modes'),safePreference('hanzi-study-mode'));
 let activeStudyMode=selectedModes()[0];
@@ -80,6 +81,8 @@ mountReading({
     try{const after=await action();await reload();after?.();}
     finally{busy=false;}
   },
+  savePhrase:saveFavouritePhrase,
+  studyPhrases:course=>{if(busy)return;const set=library.sets.find(set=>set.id==='favourite-phrases-'+course&&set.course===course);if(!set?.wordIds.length){$('reading-status').textContent='Save a phrase first, then return here to practise it.';return;}$('reading-dialog').close();deck=course;safePreference('hanzi-deck',deck);activeSetId=set.id;mistakeSession=false;completedMistakes.clear();options();showNext();},
   saveWord:async(word,course,setId)=>{
     if(!setId)throw new Error('Choose a study set first.');
     if(word.id){await setMembership(setId,word.id,true);return word.id;}
@@ -253,7 +256,7 @@ function showNext(){
   }
   saveSession();
   if((!active&&!reverse)||dictation){
-    if(dictation!=='listen-sentence')prepareWordAudio(card.text,card.sourceLanguage,card.reading);
+    if(dictation!=='listen-sentence')prepareCardAudio();
     if(!resumed&&!dictation&&$('auto-audio').checked)speakWord();
   }
 }
@@ -277,7 +280,7 @@ function reveal(checked=false,restoring=false){
   $('play-zh').setAttribute('aria-label',`Play ${deck==='zh'?'Chinese':'English'} pronunciation`);
   recordingCredit(currentCredit);
   $('word').textContent=card.text;$('word').lang=card.sourceLanguage;$('word').classList.remove('recall-prompt');
-  prepareWordAudio(card.text,card.sourceLanguage,card.reading);
+  prepareCardAudio();
   $('writing').hidden=deck!=='zh';
   if(!restoring)saveSession();
 }
@@ -752,8 +755,8 @@ function voiceSettings(){
 const canPreviewWord=()=>card&&(revealed||(!recallMode()&&!reverseMode()));
 $('audio-settings').onclick=()=>{voiceSettings();$('audio-preview-status').textContent='';$('test-voice').disabled=!canPreviewWord();openPanel('audio-dialog');};
 $('close-audio').onclick=()=>$('audio-dialog').close();
-$('english-accent').onchange=()=>{englishAccent($('english-accent').value);stopAudio();recordingCredit(null);voiceSettings();if(card&&(!recallMode()||revealed))prepareWordAudio(card.text,card.sourceLanguage,card.reading);};
-$('recording-mode').onchange=()=>{audioPreference('recording-mode',$('recording-mode').value);stopAudio();recordingCredit(null);if(card&&(!recallMode()||revealed))prepareWordAudio(card.text,card.sourceLanguage,card.reading);};
+$('english-accent').onchange=()=>{englishAccent($('english-accent').value);stopAudio();recordingCredit(null);voiceSettings();if(card&&(!recallMode()||revealed))prepareCardAudio();};
+$('recording-mode').onchange=()=>{audioPreference('recording-mode',$('recording-mode').value);stopAudio();recordingCredit(null);if(card&&(!recallMode()||revealed))prepareCardAudio();};
 $('speech-rate').oninput=()=>{audioPreference('speech-rate',$('speech-rate').value);$('rate-value').textContent=$('speech-rate').value+'×';};
 $('test-voice').onclick=()=>{if(canPreviewWord())speakWord(message=>{$('audio-preview-status').textContent=message;});};
 window.speechSynthesis?.addEventListener('voiceschanged',()=>{if($('audio-dialog').open)voiceSettings();});

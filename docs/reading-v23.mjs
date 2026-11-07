@@ -71,11 +71,18 @@ export function readingCard(story,line,word){
   return {...word,sentence:line.text,sentenceTranslation:line.translation,
     reading:word.reading||'IPA unavailable',topic:'Mini texts',level:story.level};
 }
+export function phraseCard(story,line,words){
+  const chinese=story.course==='zh';
+  const reading=chinese?readingTokens(line.text,readingIndex(story,words)).map(token=>token.word?token.word.reading:token.text).join(' ').replace(/\s+/g,' ').trim():'Listen to the sentence';
+  return {text:line.text,reading,translation:line.translation,sentence:line.text,sentenceTranslation:line.translation,
+    sourceLanguage:chinese?'zh-CN':'en-US',targetLanguage:chinese?'en-US':'ru-RU',level:story.level,topic:'Favourite phrases',cardKind:'phrase',phraseSource:story.id,contextKind:'example'};
+}
 
 // All DOM content comes through textContent, including user-created set names.
-export function mountReading({getLibrary,course,levels,openPanel,mutate,createSet,saveWord,play,prepare,stop,preference}){
+export function mountReading({getLibrary,course,levels,openPanel,mutate,createSet,saveWord,savePhrase,studyPhrases,play,prepare,stop,preference}){
   const $=id=>document.getElementById(id);
   let current,selected,saving=false;
+  const phraseButtons=[];
   const status=message=>{$('reading-status').textContent=message;};
   const element=(tag,text,className)=>{const node=document.createElement(tag);node.textContent=text;if(className)node.className=className;return node;};
   function setOptions(selectedId=''){
@@ -108,6 +115,7 @@ export function mountReading({getLibrary,course,levels,openPanel,mutate,createSe
     $('reading-story-title').textContent=entry.story.title;
     $('reading-story-meta').textContent=`${levels(entry.story.course)[entry.story.level-1]} · ${Math.round(entry.coverage.ratio*100)}% familiar vocabulary`;
     $('reading-word-panel').hidden=true;
+    phraseButtons.length=0;
     $('reading-lines').replaceChildren(...entry.story.lines.map(line=>{
       const row=element('article','','reading-line'),heading=element('div','','reading-line-heading');
       const listen=element('button','Listen','text-button');listen.setAttribute('aria-label',`Listen to ${line.speaker}: ${line.text}`);
@@ -120,7 +128,18 @@ export function mountReading({getLibrary,course,levels,openPanel,mutate,createSe
         button.setAttribute('aria-label',`Translate ${token.text}`);button.onclick=()=>selectWord(token.word,line,button);text.append(button);
       }
       const translation=element('details','','reading-translation');translation.append(element('summary','Translation'),element('p',line.translation));
-      row.append(heading,text,translation);return row;
+      const favourite=element('button','☆ Save phrase','text-button');favourite.setAttribute('aria-label',`Save phrase: ${line.text}`);
+      const already=getLibrary().words.some(word=>word.cardKind==='phrase'&&word.text===line.text&&word.sourceLanguage===(entry.story.course==='zh'?'zh-CN':'en-US'));
+      if(already)favourite.textContent='★ Saved · add again';
+      favourite.onclick=()=>{
+        if(saving)return;
+        void save(async()=>{
+          await savePhrase(phraseCard(entry.story,line,getLibrary().words),entry.story.course);
+          return ()=>{favourite.textContent='★ Saved';status('Phrase saved to Favourite phrases. Your daily new-word limit still applies.');};
+        });
+      };
+      phraseButtons.push(favourite);
+      row.append(heading,text,translation,favourite);return row;
     }));
     setOptions(preference('hanzi-reading-set-'+entry.story.course)||'');status('');
     $('reading-dialog').scrollTop=0;
@@ -152,9 +171,9 @@ export function mountReading({getLibrary,course,levels,openPanel,mutate,createSe
   $('reading-listen-word').onclick=()=>{if(selected)play(selected.word.text,selected.word.sourceLanguage,status,{word:true,reading:selected.word.reading});};
   async function save(action){
     if(saving)return;
-    saving=true;updateAdd();$('reading-create-button').disabled=true;$('reading-back').disabled=true;status('Saving…');
+    saving=true;updateAdd();phraseButtons.forEach(button=>button.disabled=true);$('study-phrases').disabled=true;$('reading-create-button').disabled=true;$('reading-back').disabled=true;status('Saving…');
     try{await mutate(action);}catch(error){status(error.message);}
-    finally{saving=false;$('reading-create-button').disabled=false;$('reading-back').disabled=false;updateAdd();}
+    finally{saving=false;phraseButtons.forEach(button=>button.disabled=false);$('study-phrases').disabled=false;$('reading-create-button').disabled=false;$('reading-back').disabled=false;updateAdd();}
   }
   $('reading-create').onsubmit=event=>{
     event.preventDefault();const course=$('reading-course').value,name=$('reading-set-name').value;
@@ -169,4 +188,5 @@ export function mountReading({getLibrary,course,levels,openPanel,mutate,createSe
     const {word,line}=selected,story=current.story,setId=$('reading-set').value;
     void save(async()=>{const id=await saveWord(readingCard(story,line,word),story.course,setId);return ()=>{word.id=id;setOptions(setId);status('Word saved. Practise it in Search & study sets.');};});
   };
+  $('study-phrases').onclick=()=>{if(!saving)studyPhrases($('reading-course').value);};
 }

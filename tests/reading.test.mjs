@@ -3,7 +3,30 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { miniTexts } from '../web/reading-data.mjs';
-import { readingIndex, readingTokens, readingCoverage, rankedReadings, readingCard } from '../web/reading.mjs';
+import { readingIndex, readingTokens, readingCoverage, rankedReadings, readingCard, phraseCard } from '../web/reading.mjs';
+import { openLibrary, snapshot, saveFavouritePhrase, restoreBackup, syncPayload } from '../docs/storage.mjs';
+import { checkAnswer, checkDictation } from '../docs/study.mjs';
+
+test('favourite phrases preserve context and pinyin without duplicate cards or reviews',async t=>{
+  const data=new Map();
+  for(const [key,value] of Object.entries({navigator:{},indexedDB:undefined,localStorage:{getItem:key=>data.get(key)??null,setItem:(key,value)=>data.set(key,value)}})){
+    const descriptor=Object.getOwnPropertyDescriptor(globalThis,key);Object.defineProperty(globalThis,key,{configurable:true,value});
+    t.after(()=>{if(descriptor)Object.defineProperty(globalThis,key,descriptor);else delete globalThis[key];});
+  }
+  await openLibrary([]);
+  const zh=miniTexts.find(story=>story.id==='zh-tea'),card=phraseCard(zh,zh.lines[0],[]);
+  assert.equal(card.reading,'nǐ xiǎng hē shén me ？');assert.equal(card.text,zh.lines[0].text);
+  assert.ok(checkAnswer(card,'你想喝什么'));assert.ok(checkAnswer(card,'ni3 xiang3 he1 shen2 me'));
+  assert.ok(checkDictation(card,'ni3 xiang3 he1 shen2 me5','listen-tones'));
+  assert.ok(!checkDictation(card,'ni4 xiang3 he1 shen2 me5','listen-tones'));
+  const id=await saveFavouritePhrase(card,'zh');assert.equal(await saveFavouritePhrase(card,'zh'),id);
+  const en=miniTexts.find(story=>story.course==='en');await saveFavouritePhrase(phraseCard(en,en.lines[0],[]),'en');
+  const saved=await snapshot();assert.equal(saved.words.length,2);assert.equal(saved.sets.length,2);
+  assert.deepEqual(saved.sets.find(set=>set.course==='zh').wordIds,[id]);assert.equal(saved.reviews.length,0);assert.ok(saved.progress.every(p=>p.due===0));
+  assert.equal(syncPayload(saved).words[0].cardKind,'phrase');
+  await restoreBackup(saved);assert.equal((await snapshot()).words[0].reading,card.reading);
+  const before=[...data.values()];await assert.rejects(saveFavouritePhrase(card,'en'));assert.deepEqual([...data.values()],before);
+});
 
 test('reading segmentation prefers phrases, preserves punctuation and keeps word boundaries',()=>{
   const story=miniTexts.find(s=>s.id==='en-plans');

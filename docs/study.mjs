@@ -63,6 +63,11 @@ export function checkAnswer(word, input) {
   const normalize = text => text.normalize('NFKC').trim().toLowerCase().replace(/[‘’]/g,"'").replace(/\s+/g,' ');
   const answer = normalize(input);
   if (!answer) return false;
+  if(word.cardKind==='phrase'){
+    if(checkDictation(word,input,'listen-sentence'))return true;
+    const letters=value=>pinyinKey(value).replace(/[^a-zv]/g,'');
+    return word.sourceLanguage==='zh-CN'&&Boolean(letters(answer))&&letters(answer)===letters(word.reading);
+  }
   return answer === normalize(word.text) || (word.sourceLanguage === 'zh-CN' && pinyinKey(answer) === pinyinKey(word.reading));
 }
 
@@ -80,8 +85,9 @@ function toneSpelling(value){
 
 export function checkDictation(word,input,mode){
   if(mode==='listen-tones'){
-    const expected=toneSpelling(word.reading);
-    return Boolean(expected)&&toneSpelling(input)===expected;
+    const phrasePinyin=value=>word.cardKind==='phrase'?value.replace(/[^\p{L}\p{N}\s:'’\-]/gu,''):value;
+    const expected=toneSpelling(phrasePinyin(word.reading));
+    return Boolean(expected)&&toneSpelling(phrasePinyin(input))===expected;
   }
   if(mode==='listen-sentence'){
     const zh=word.sourceLanguage==='zh-CN';

@@ -151,6 +151,28 @@ export async function importWords(words,course,setId=''){
   return added;
 }
 const courseLanguages={zh:['zh-CN','en-US'],en:['en-US','ru-RU']};
+export async function saveFavouritePhrase(phrase,course){
+  const candidate={...phrase,id:`custom-${crypto.randomUUID()}`,cardKind:'phrase'};
+  validateWords([candidate]);
+  if(!inCourse(candidate,course)||!candidate.sentence?.trim()||!candidate.sentenceTranslation?.trim())throw new Error('Invalid phrase.');
+  let saved;
+  await update(state=>{
+    const words=[...catalog.values(),...state.words];
+    let word=words.find(word=>importWordKey(word)===importWordKey(candidate));
+    if(!word){word=candidate;state.words.push(word);}
+    const sets=state.sets??=[];const id=`favourite-phrases-${course}`;
+    let set=sets.find(item=>item.id===id);
+    if(!set){
+      if(sets.length>=100)throw new Error('You have 100 study sets. Remove an unused set before saving phrases.');
+      let name='Favourite phrases',suffix=2;
+      while(sets.some(item=>item.course===course&&item.name.toLowerCase()===name.toLowerCase()))name=`Favourite phrases (${suffix++})`;
+      set={id,name,course,wordIds:[]};sets.push(set);
+    }
+    if(set.course!==course)throw new Error('The phrase set belongs to another course.');
+    set.wordIds=[...new Set([...set.wordIds,word.id])];saved=word.id;
+  });
+  return saved;
+}
 function inCourse(word,course){
   const languages=courseLanguages[course];
   return languages&&word?.sourceLanguage===languages[0]&&word.targetLanguage===languages[1];
