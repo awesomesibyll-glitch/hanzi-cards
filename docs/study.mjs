@@ -109,12 +109,13 @@ export function studySchedule(progress, rating, now, rule = 2) {
   return {...next, interval:days, due:now + days * DAY};
 }
 
-export function studyQueue(cards, reviews, limit, now = Date.now()) {
+export function studyQueue(cards, reviews, limit, now = Date.now(), known = new Set()) {
+  cards=cards.filter(card=>!known.has(card.id));
   const day = new Date(now);
   day.setHours(0,0,0,0);
   const firstReviews = new Map();
   for (const review of reviews) {
-    if(review.reviewedAt>now)continue;
+    if(review.reviewedAt>now||known.has(review.wordId))continue;
     const previous = firstReviews.get(review.wordId) ?? Infinity;
     if (review.reviewedAt < previous) firstReviews.set(review.wordId, review.reviewedAt);
   }

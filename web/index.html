@@ -41,6 +41,7 @@
           <button id="reveal" class="primary wide">Reveal answer</button>
           <button id="next-practice" class="primary wide" hidden>Next practice card</button>
           <p id="card-audio-status" class="audio-credit" role="status"></p><p id="recording-credit" class="audio-credit" hidden></p><div id="ratings" hidden><p>How well did you remember?</p><div class="rating-grid"></div></div>
+          <button id="mark-known" class="text-button wide">I already know this</button>
         </article>
         <div id="empty" class="empty" hidden><h2>All caught up</h2><p id="next-due">You're all caught up in this selection.</p><button id="refresh" class="primary">Check again</button></div>
       </section>
@@ -102,6 +103,8 @@
     <h2 id="library-title">Search &amp; study sets</h2>
     <label>Course<select id="library-course"><option value="zh">Chinese → English</option><option value="en">English → Russian</option></select></label>
     <label>Search words<input id="library-query" type="search" placeholder="Hanzi, pinyin or translation" autocomplete="off" spellcheck="false"></label>
+    <label>Word status<select id="library-status-filter"><option value="all">All words</option><option value="learning">To learn</option><option value="known">Already known</option></select></label>
+    <details class="known-help"><summary>About known words</summary><p>Mark words you already know to exclude them from every study mode, both directions and your daily count. This does not add a review or use a new-word slot. Choose Already known and Learn again to bring them back. Your previous review history is kept.</p></details>
     <form id="create-set"><label>New set name<input id="set-name" maxlength="60" required placeholder="Travel"></label><button class="secondary">Create set</button></form>
     <label>Study set<select id="library-set"></select></label>
     <div id="set-actions" class="set-actions" hidden>

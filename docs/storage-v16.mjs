@@ -1,5 +1,6 @@
-import { studyQueue, studySchedule, withContext } from './study-v14.mjs';
+import { studyQueue, studySchedule, withContext } from './study-v16.mjs';
 import { importWordKey } from './import-list.mjs';
+import { knownWordIds, validateKnownWords, mergeKnownWords } from './known.mjs';
 export const RATINGS = ['Again', 'Hard', 'Good', 'Easy'];
 export const STORAGE_KEY = 'hanzi-study-v4';
 let catalog;
@@ -42,15 +43,32 @@ export async function snapshot() {
   const state=read();
   const words=[...catalog.values(),...state.words];
   const saved=new Map(state.progress.map(p=>[p.wordId,p]));
+  const knownWords=state.knownWords??[];
   const progress=words.map(w=>{
     const item=saved.get(w.id)??freshProgress(w.id);
     return {...item,status:!item.due?'new':item.repetitions?'review':'learning'};
   });
-  return {version:1,exportedAt:new Date().toISOString(),words,progress,reviews:state.reviews,reverseProgress:state.reverseProgress??[],reverseReviews:state.reverseReviews??[],sets:state.sets??[],refreshes:state.refreshes??{},attribution:[{source:'Complete HSK Vocabulary / CC-CEDICT',url:'https://github.com/drkameleon/complete-hsk-vocabulary',license:'CC BY-SA 4.0 (adapted dictionary fields)'},{source:'Vocab Bloom Hub',url:'https://huggingface.co/datasets/Fristail27/vocab-bloom-hub-en',license:'CC BY 4.0',notice:'AI-generated, not human-verified; translations and CEFR levels may contain errors.'}]};
+  return {version:1,exportedAt:new Date().toISOString(),words,progress,reviews:state.reviews,knownWords,reverseProgress:state.reverseProgress??[],reverseReviews:state.reverseReviews??[],sets:state.sets??[],refreshes:state.refreshes??{},attribution:[{source:'Complete HSK Vocabulary / CC-CEDICT',url:'https://github.com/drkameleon/complete-hsk-vocabulary',license:'CC BY-SA 4.0 (adapted dictionary fields)'},{source:'Vocab Bloom Hub',url:'https://huggingface.co/datasets/Fristail27/vocab-bloom-hub-en',license:'CC BY 4.0',notice:'AI-generated, not human-verified; translations and CEFR levels may contain errors.'}]};
+}
+export async function setWordKnown(wordId,known,now=Date.now()){
+  if(typeof known!=='boolean'||!Number.isSafeInteger(now)||now<0||now>8e15-1)throw new Error('Invalid known-word change.');
+  await update(state=>{
+    const words=[...catalog.values(),...state.words],word=words.find(item=>item.id===wordId);
+    if(!word)throw new Error('This word is no longer available.');
+    const spelling=text=>text.normalize('NFKC').trim().toLowerCase();
+    const matching=words.filter(item=>item.sourceLanguage===word.sourceLanguage&&item.targetLanguage===word.targetLanguage&&spelling(item.text)===spelling(word.text));
+    const records=new Map((state.knownWords??[]).map(item=>[item.wordId,item]));
+    for(const item of matching){
+      const updatedAt=Math.max(now,(records.get(item.id)?.updatedAt??-1)+1);
+      records.set(item.id,{wordId:item.id,known,updatedAt});
+    }
+    state.knownWords=[...records.values()];
+  });
 }
 export async function saveQuickRefresh(wordId,now=Date.now()){
   await update(state=>{
     const midnight=new Date(now);
+    if(knownWordIds(state.knownWords).has(wordId))return;
     midnight.setHours(0,0,0,0);
     const seen=state.refreshes??={};
     if(Object.values(seen).some(time=>time>=+midnight&&time<=now))return;
@@ -61,6 +79,8 @@ export async function saveQuickRefresh(wordId,now=Date.now()){
 export async function saveReview(card,rating,now=Date.now(),limit=10,mistake=false,reverse=false) {
   if(!RATINGS.includes(rating))throw new Error('Unknown review rating');
   await update(state=>{
+    const known=knownWordIds(state.knownWords);
+    if(known.has(card.id))throw new Error('This word is marked as known. Your queue has been refreshed.');
     const progress=reverse?(state.reverseProgress??=[]):state.progress;
     const reviews=reverse?(state.reverseReviews??=[]):state.reviews;
     const index=progress.findIndex(p=>p.wordId===card.id);
@@ -68,7 +88,7 @@ export async function saveReview(card,rating,now=Date.now(),limit=10,mistake=fal
     if ((!catalog.has(card.id)&&!state.words.some(w=>w.id===card.id))||current.due!==card.due||current.repetitions!==card.repetitions) {
       throw new Error('This card changed in another tab. Your queue has been refreshed.');
     }
-    if (!current.due && !studyQueue([card],[...state.reviews,...(state.reverseReviews??[])],limit,now).queue.length) throw new Error('You reached today’s new-word limit.');
+    if (!current.due && !studyQueue([card],[...state.reviews,...(state.reverseReviews??[])],limit,now,known).queue.length) throw new Error('You reached today’s new-word limit.');
     const next={...studySchedule(current,rating,now),wordId:card.id};
     if(index===-1)progress.push(next);else progress[index]=next;
     reviews.push({wordId:card.id,rating,reviewedAt:now,nextDue:next.due,rule:2,...(mistake&&{mistake:true})});
@@ -166,6 +186,7 @@ function validateWords(words) {
 export function validateBackup(data){
   if(data?.version!==1)throw new Error('Unsupported backup version.');
   const ids=validateWords(data.words);
+  if(data.knownWords!==undefined)validateKnownWords(data.knownWords,ids);
   validateHistory(data.progress,data.reviews,ids,true);
   validateHistory(data.reverseProgress===undefined?[]:data.reverseProgress,data.reverseReviews===undefined?[]:data.reverseReviews,ids,false);
   if(data.sets!==undefined)validateSets(data.sets,data.words);
@@ -191,7 +212,8 @@ export async function restoreBackup(data) {
     reverseProgress:(data.reverseProgress??[]).filter(p=>p.due),
     reverseReviews:data.reverseReviews??[],
     sets:data.sets??[],
-    refreshes:data.refreshes??{}
+    refreshes:data.refreshes??{},
+    knownWords:data.knownWords??[]
   }));
 }
 
@@ -200,11 +222,12 @@ const reviewKey = ({wordId, rating, reviewedAt}) => JSON.stringify([wordId, rati
 const compareReviews = (a, b) => a.reviewedAt - b.reviewedAt || RATINGS.indexOf(a.rating) - RATINGS.indexOf(b.rating);
 
 const syncReviews=reviews=>reviews.map(({wordId,rating,reviewedAt,rule,mistake})=>({wordId,rating,reviewedAt,rule,...(mistake===true&&{mistake:true})}));
-export function syncPayload({words, reviews, reverseReviews=[]}) {
+export function syncPayload({words, reviews, reverseReviews=[],knownWords=[]}) {
   return {
     version:1,
     words:words.filter(word => word.id.startsWith('custom-')),
     reviews:syncReviews(reviews),
+    ...(knownWords.length&&{knownWords}),
     ...(reverseReviews.length&&{reverseReviews:syncReviews(reverseReviews)})
   };
 }
@@ -268,6 +291,8 @@ export async function mergeSync(backups) {
   await update(state=>{
     const changes=mergeSyncRecords([...catalog.values(),...state.words],state.reviews,backups);
     state.words.push(...changes.words);
+    const ids=new Set([...catalog.keys(),...state.words.map(word=>word.id)]);
+    state.knownWords=mergeKnownWords(state.knownWords,backups.map(backup=>backup.knownWords??[]),ids);
     state.progress=applyHistory(state.progress,state.reviews,changes);
     const reverseBackups=backups.filter(backup=>backup.reverseReviews!==undefined)
       .map(backup=>({version:1,words:[],reviews:backup.reverseReviews}));

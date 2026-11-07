@@ -1,4 +1,5 @@
 import { miniTexts } from './reading-data.mjs';
+import { knownWordIds } from './known.mjs';
 
 const fold=text=>text.normalize('NFKC').toLocaleLowerCase('en').replaceAll('’',"'");
 const letter=char=>Boolean(char&&/[\p{L}\p{N}]/u.test(char));
@@ -58,6 +59,7 @@ export function readingCoverage(story,index,known){
 
 export function rankedReadings(course,level,library){
   const known=new Set([...library.progress,...(library.reverseProgress??[])].filter(p=>p.repetitions>0).map(p=>p.wordId));
+  for(const id of knownWordIds(library.knownWords))known.add(id);
   return miniTexts.filter(story=>story.course===course&&(!level||story.level===level)).map(story=>{
     const index=readingIndex(story,library.words);
     return {story,index,coverage:readingCoverage(story,index,known)};
