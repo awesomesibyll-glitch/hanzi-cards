@@ -232,3 +232,8 @@ noscript { display: block; padding: 25px; text-align: center; }
 #reading-create { display:flex; flex-wrap:wrap; gap:8px; align-items:end; padding:8px 0; }
 #reading-create label { flex:1 1 150px; }
 @media (max-width:520px) { #reading-dialog { padding:18px; } #reading-word-panel { bottom:-18px; } }
+
+.mode-options { display:grid; gap:5px; border:1px solid var(--line); border-radius:14px; padding:10px; }
+.mode-options legend { font-size:14px; font-weight:650; }
+.mode-options label { display:flex; gap:10px; align-items:center; min-height:44px; font-size:14px; }
+#mode-error:empty { display:none; }

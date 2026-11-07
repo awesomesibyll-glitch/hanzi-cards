@@ -8,6 +8,7 @@ import { previewImport } from './import-list.mjs';
 import { mountReading } from './reading-v16.mjs';
 import { knownWordIds } from './known.mjs';
 import { mountConfusions } from './confusions-v19.mjs';
+import { parseModes, availableModes } from './modes.mjs';
 const $=id=>document.getElementById(id);
 const openPanel=id=>{$('menu-dialog').close();$(id).showModal();};
 for(const gesture of ['gesturestart','gesturechange'])document.addEventListener(gesture,event=>event.preventDefault(),{passive:false});
@@ -33,7 +34,10 @@ function recordingCredit(recording){
 function speakWord(notifyPlayback=audioStatus){
   if(card)void playAudio(card.text,card.sourceLanguage,notifyPlayback,{word:true,reading:card.reading,credit:recordingCredit});
 }
-const studyMode=()=>safePreference('hanzi-study-mode')||'classic';
+const selectedModes=()=>parseModes(safePreference('hanzi-study-modes'),safePreference('hanzi-study-mode'));
+let activeStudyMode=selectedModes()[0];
+const studyMode=()=>activeStudyMode;
+const advanceMode=()=>{const cursor=Number(safePreference('hanzi-mode-cursor'))||0;safePreference('hanzi-mode-cursor',String(cursor+1));};
 const reverseMode=()=>studyMode().startsWith('reverse-');
 let mistakeSession=false, incorrectAnswer=false, refreshing=false;
 const completedMistakes=new Set();
@@ -92,11 +96,11 @@ function readSession(){
 }
 function sessionScope(){
   const set=activeSet();
-  return JSON.stringify([deck,set?.id??'',studyMode(),mistakeSession,set?'':$('level').value,set?'':$('topic').value]);
+  return JSON.stringify([deck,set?.id??'',studyMode(),selectedModes(),mistakeSession,set?'':$('level').value,set?'':$('topic').value]);
 }
 function saveSession(){
   safePreference(sessionKey,JSON.stringify({
-    scope:sessionScope(),deck,setId:activeSet()?.id??'',mistake:mistakeSession,
+    scope:sessionScope(),mode:studyMode(),deck,setId:activeSet()?.id??'',mistake:mistakeSession,
     completed:[...completedMistakes],wordId:card?.id,due:card?.due,repetitions:card?.repetitions,
     refresh:refreshing,revealed,draft:$('recall-input').value,
     checked:revealed&&!$('recall-feedback').hidden
@@ -149,13 +153,36 @@ function currentQueue(cards,now=Date.now()){
   const result=studyQueue(cards,[...library.reviews,...library.reverseReviews],dailyLimit(),now,knownWordIds(library.knownWords));
   return {...result,refresh:quickRefresh(cards,reviews,library.refreshes,result.queue.length,now)};
 }
+function mixedChoices(){
+  const previous=activeStudyMode;
+  const choices=availableModes(selectedModes(),deck).map(mode=>{
+    activeStudyMode=mode;const selection=currentQueue(filteredCards());return {mode,selection};
+  });
+  activeStudyMode=previous;return choices;
+}
 function renderStats(selection=currentQueue(filteredCards())){
   const midnight=new Date();midnight.setHours(0,0,0,0);
-  $('due-count').textContent=selection.queue.length+Number(Boolean(selection.refresh));
+  if(!mistakeSession){
+    const ids=new Set();for(const {mode,selection} of mixedChoices()){
+      for(const word of [...selection.queue,...(selection.refresh?[selection.refresh]:[])])ids.add(`${mode.startsWith('reverse-')?'reverse':'forward'}:${word.id}`);
+    }
+    $('due-count').textContent=ids.size;
+  }else $('due-count').textContent=selection.queue.length+Number(Boolean(selection.refresh));
   const ids=new Set(deckWords().map(w=>w.id));$('today-count').textContent=[...library.reviews,...library.reverseReviews].filter(r=>ids.has(r.wordId)&&r.reviewedAt>=midnight.getTime()).length;
   $('library-count').textContent=deckWords().length;
 }
 function showNext(){
+  if(!mistakeSession){
+    const choices=mixedChoices(),ready=choices.filter(choice=>choice.selection.queue.length||choice.selection.refresh);
+    const saved=readSession();
+    const resumed=ready.find(choice=>{
+      activeStudyMode=choice.mode;
+      return saved?.mode===choice.mode&&Boolean(resumableCard(choice.selection.queue,choice.selection.refresh,saved,sessionScope()));
+    });
+    const cursor=Number(safePreference('hanzi-mode-cursor'))||0;
+    const order=choices.slice(cursor%Math.max(1,choices.length)).concat(choices.slice(0,cursor%Math.max(1,choices.length)));
+    activeStudyMode=(resumed??order.find(choice=>ready.includes(choice))??choices[0])?.mode??'classic';
+  }
   stopAnimation();clearInk();stopAudio();recordingCredit(null);audioStatus('');
   const cards=filteredCards(),now=Date.now(),active=recallMode(),reverse=reverseMode(),cloze=!mistakeSession&&studyMode()==='cloze',dictation=dictationMode();
   const selection=currentQueue(cards,now),{queue,limited,refresh}=selection;
@@ -231,7 +258,7 @@ async function reload(){library=await snapshot();renderStats();}
 async function rate(rating){
   if(busy||!card||!revealed||mistakeSession||refreshing)return;
   busy=true;const target=card;document.querySelectorAll('.rating-grid button').forEach(b=>b.disabled=true);
-  try{await saveReview(target,rating,Date.now(),dailyLimit(),incorrectAnswer,reverseMode());await reload();notify('');showNext();}
+  try{await saveReview(target,rating,Date.now(),dailyLimit(),incorrectAnswer,reverseMode());advanceMode();await reload();notify('');showNext();}
   catch(e){notify(e.message);await reload();showNext();}
   finally{busy=false;document.querySelectorAll('.rating-grid button').forEach(b=>b.disabled=false);}
 }
@@ -330,12 +357,13 @@ $('next-practice').onclick=async()=>{
   busy=true;$('next-practice').disabled=true;
   try{
     await saveQuickRefresh(card.id);
+    advanceMode();
     await reload();showNext();
   }catch(error){notify(error.message);}
   finally{busy=false;$('next-practice').disabled=false;}
 };
 $('study-settings').onclick=()=>{
-  $('study-mode').value=studyMode();
+  for(const input of document.querySelectorAll('[name=study-modes]'))input.checked=selectedModes().includes(input.value);
   $('daily-limit').value=String(dailyLimit());
   openPanel('study-dialog');
 };
@@ -345,7 +373,12 @@ $('study-form').onsubmit=event=>{
   if(busy)return;
   try {
     const wasReverse=reverseMode();
-    localStorage.setItem('hanzi-study-mode',$('study-mode').value);
+    const modes=[...document.querySelectorAll('[name=study-modes]:checked')].map(input=>input.value);
+    if(!modes.length){$('mode-error').textContent='Choose at least one card type.';return;}
+    $('mode-error').textContent='';
+    localStorage.setItem('hanzi-study-modes',JSON.stringify(modes));
+    localStorage.setItem('hanzi-study-mode',modes[0]);
+    safePreference('hanzi-mode-cursor','0');
     localStorage.setItem('hanzi-daily-limit',$('daily-limit').value);
     if(wasReverse!==reverseMode())completedMistakes.clear();
     $('study-dialog').close();
@@ -671,7 +704,7 @@ $('sync-form').onsubmit = async event => {
 };
 window.addEventListener('library-error',e=>notify(e.detail));
 window.addEventListener('storage',event=>{
-  if(library&&!busy&&[STORAGE_KEY,'hanzi-study-mode','hanzi-daily-limit'].includes(event.key))void reload().then(()=>{
+  if(library&&!busy&&[STORAGE_KEY,'hanzi-study-mode','hanzi-study-modes','hanzi-daily-limit'].includes(event.key))void reload().then(()=>{
     if(activeSetId&&!activeSet())activeSetId='';
     options();showNext();
     if($('library-dialog').open)refreshLibrary($('library-set').value);
