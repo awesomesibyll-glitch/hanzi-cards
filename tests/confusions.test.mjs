@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { pairKey, validateConfusions, mergeConfusions, activeConfusions, pairTrials, suggestedConfusions } from '../docs/confusions.mjs';
+import { pairKey, validateConfusions, mergeConfusions, activeConfusions, pairTrials, suggestedConfusions, contrastWord } from '../docs/confusions.mjs';
 import { openLibrary, snapshot, setConfusion, restoreBackup, validateBackup, syncPayload, mergeSync } from '../docs/storage.mjs';
 
 const word=(id,text,sourceLanguage='en-US')=>({id,text,reading:'/test/',translation:id,sourceLanguage,targetLanguage:sourceLanguage==='en-US'?'ru-RU':'en-US',topic:'General',level:1});
@@ -22,8 +22,10 @@ test('practice tests both meanings, omits known words and avoids identical trans
   assert.deepEqual(trials.map(trial=>trial.target.id).sort(),['a','b']);
   assert.ok(trials.every(trial=>trial.choices.length===2&&trial.choices.some(word=>word.id===trial.target.id)));
   assert.deepEqual(pairTrials(pairs,new Set(['a'])),[]);
-  const ambiguous=activeConfusions([pair()],words.map(word=>({...word,translation:'same'})),'en');
+  const ambiguous=activeConfusions([pair()],words.map(word=>({...word,text:'word-'+word.id,translation:'same'})),'en');
   assert.deepEqual(pairTrials(ambiguous),[]);
+  assert.match(contrastWord(words[0]).translation,/влиять/);
+  assert.equal(contrastWord(words[0]).reading,'/əˈfekt/');
 });
 
 test('sync keeps newer removals and uses an order-independent tie-break',()=>{

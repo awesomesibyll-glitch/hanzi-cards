@@ -1,7 +1,7 @@
 import { studyQueue, studySchedule, withContext } from './study-v16.mjs';
 import { importWordKey } from './import-list.mjs';
 import { knownWordIds, validateKnownWords, mergeKnownWords } from './known.mjs';
-import { pairKey, validateConfusions, mergeConfusions } from './confusions.mjs';
+import { pairKey, validateConfusions, mergeConfusions } from './confusions-v19.mjs';
 export const RATINGS = ['Again', 'Hard', 'Good', 'Easy'];
 export const STORAGE_KEY = 'hanzi-study-v4';
 let catalog;

@@ -4,6 +4,21 @@ import { knownWordIds } from './known.mjs';
 export const pairKey=ids=>JSON.stringify([...ids].sort());
 const fold=value=>value.normalize('NFKC').trim().toLowerCase();
 const sameCourse=(a,b)=>a.sourceLanguage===b.sourceLanguage&&a.targetLanguage===b.targetLanguage;
+const contrastMeanings=new Map([
+  ['en-US:affect',['/əˈfekt/','влиять на; затрагивать (глагол)']],
+  ['en-US:effect',['/ɪˈfekt/','эффект; результат; последствие (существительное)']],
+  ['en-US:accept',['/əkˈsept/','принимать; соглашаться']],
+  ['en-US:except',['/ɪkˈsept/','кроме; за исключением']],
+  ['en-US:advice',['/ədˈvaɪs/','совет; рекомендация (существительное)']],
+  ['en-US:advise',['/ədˈvaɪz/','советовать; рекомендовать (глагол)']],
+  ['zh-CN:买',['mǎi','to buy']],['zh-CN:卖',['mài','to sell']],
+  ['zh-CN:未',['wèi','not yet']],['zh-CN:末',['mò','end; final part']],
+  ['zh-CN:再',['zài','again; once more']],['zh-CN:在',['zài','at; in; marks an action in progress']]
+]);
+export function contrastWord(word){
+  const meaning=contrastMeanings.get(`${word.sourceLanguage}:${fold(word.text)}`);
+  return meaning?{...word,reading:meaning[0],translation:meaning[1]}:word;
+}
 const contrastExamples=new Map([
   ['en-US:affect',['Lack of sleep can affect your memory.','Недосып может повлиять на память.']],
   ['en-US:effect',['The change had a positive effect.','Изменение оказало положительное влияние.']],
@@ -54,6 +69,7 @@ export const activeConfusions=(records,words,course)=>{
   return (records??[]).filter(record=>record.active).map(record=>({...record,words:record.wordIds.map(id=>byId.get(id))}))
     .filter(record=>record.words.every(Boolean)&&sameCourse(...record.words)&&
       record.words[0].sourceLanguage===(course==='zh'?'zh-CN':'en-US'))
+    .map(record=>({...record,words:record.words.map(contrastWord)}))
     .sort((a,b)=>b.updatedAt-a.updatedAt||pairKey(a.wordIds).localeCompare(pairKey(b.wordIds)));
 };
 
@@ -84,13 +100,15 @@ export function mountConfusions({getLibrary,getCourse,getCard,canOpen,openPanel,
     $('save-pair').disabled=saving||!selected.every(Boolean)||selected[0].id===selected[1].id||fold(selected[0].text)===fold(selected[1].text);
   }
   function comparison(words,note=''){
+    words=words.map(contrastWord);
     const container=node('div','','pair-comparison');
     for(const word of words){
       const column=node('article','','pair-word'),heading=node('div','','pair-word-heading');
       const title=node('strong',word.text);title.lang=word.sourceLanguage;
-      const listen=node('button','Listen','secondary');listen.setAttribute('aria-label',`Listen to ${word.text}`);
+      const inContext=word.sourceLanguage==='en-US'&&fold(word.text)==='affect';
+      const listen=node('button',inContext?'Listen in context':'Listen','secondary');listen.setAttribute('aria-label',`Listen to ${word.text}`);
       const credit=node('p','','audio-credit');
-      listen.onclick=()=>{prepare(word);play(word.text,word.sourceLanguage,status,{word:true,reading:word.reading,credit:recording=>{
+      listen.onclick=()=>{prepare(word);play(inContext?contrastExamples.get('en-US:affect')[0]:word.text,word.sourceLanguage,status,{word:!inContext,reading:word.reading,credit:recording=>{
         credit.replaceChildren();if(!recording)return;
         const source=node('a',recording.artist||'Recording and contributor');source.href=recording.source;source.target='_blank';source.rel='noopener noreferrer';
         const license=node('a','Creative Commons license');license.href=recording.license;license.target='_blank';license.rel='noopener noreferrer';
@@ -154,7 +172,7 @@ export function mountConfusions({getLibrary,getCourse,getCard,canOpen,openPanel,
     $('pair-practice-help').hidden=!pairs.length||!$('start-pair-practice').disabled;
   }
   function refreshCourse(){
-    index=indexWords(getLibrary().words.filter(word=>word.sourceLanguage===(course()==='zh'?'zh-CN':'en-US')&&word.targetLanguage===(course()==='zh'?'en-US':'ru-RU')));
+    index=indexWords(getLibrary().words.filter(word=>word.sourceLanguage===(course()==='zh'?'zh-CN':'en-US')&&word.targetLanguage===(course()==='zh'?'en-US':'ru-RU')).map(contrastWord));
     resetEditor();renderList();status('');
   }
   async function persist(words,active,note){
