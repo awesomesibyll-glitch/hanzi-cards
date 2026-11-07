@@ -18,15 +18,15 @@ cpSync(join(root,'THIRD_PARTY_NOTICES.md'),join(out,'THIRD_PARTY_NOTICES.md'));
 writeFileSync(join(out,'.nojekyll'),'');
 // Versioned entry assets avoid mixing cached modules with upgraded HTML.
 const versionedStudy=source=>source.replace("'./study.mjs'","'./study-v16.mjs'");
-writeFileSync(join(out,'app-v20.mjs'),versionedStudy(readFileSync(join(out,'app.mjs'),'utf8')).replace("'./storage.mjs'","'./storage-v19.mjs'").replace("'./audio.mjs'","'./audio-v12.mjs'").replace("'./reading.mjs'","'./reading-v16.mjs'").replace("'./confusions.mjs'","'./confusions-v19.mjs'"));
-writeFileSync(join(out,'storage-v19.mjs'),versionedStudy(readFileSync(join(out,'storage.mjs'),'utf8')).replace("'./confusions.mjs'","'./confusions-v19.mjs'"));
+writeFileSync(join(out,'app-v21.mjs'),versionedStudy(readFileSync(join(out,'app.mjs'),'utf8')).replace("'./storage.mjs'","'./storage-v21.mjs'").replace("'./audio.mjs'","'./audio-v12.mjs'").replace("'./reading.mjs'","'./reading-v16.mjs'").replace("'./confusions.mjs'","'./confusions-v19.mjs'"));
+writeFileSync(join(out,'storage-v21.mjs'),versionedStudy(readFileSync(join(out,'storage.mjs'),'utf8')).replace("'./confusions.mjs'","'./confusions-v19.mjs'"));
 cpSync(join(out,'confusions.mjs'),join(out,'confusions-v19.mjs'));
 cpSync(join(out,'study.mjs'),join(out,'study-v16.mjs'));
 cpSync(join(out,'reading.mjs'),join(out,'reading-v16.mjs'));
 writeFileSync(join(out,'audio-v12.mjs'),readFileSync(join(out,'audio.mjs'),'utf8').replace("'./recordings.mjs'","'./recordings-v12.mjs'"));
 cpSync(join(out,'recordings.mjs'),join(out,'recordings-v12.mjs'));
 cpSync(join(out,'styles.css'),join(out,'styles-v20.css'));
-const html=readFileSync(join(out,'index.html'),'utf8').replace('./app.mjs','./app-v20.mjs').replace('./styles.css','./styles-v20.css');
+const html=readFileSync(join(out,'index.html'),'utf8').replace('./app.mjs','./app-v21.mjs').replace('./styles.css','./styles-v20.css');
 writeFileSync(join(out,'index.html'),html);
 writeFileSync(join(out,'study.html'),html);
 writeFileSync(join(out,'devices.html'),html);
@@ -48,6 +48,7 @@ writeFileSync(join(out,'bulk.html'),html);
 writeFileSync(join(out,'pairs.html'),html);
 writeFileSync(join(out,'contrast.html'),html);
 writeFileSync(join(out,'mix.html'),html);
+writeFileSync(join(out,'find.html'),html);
 const files=['./'];
 const hash=createHash('sha256');
 function walk(dir){for(const entry of readdirSync(dir,{withFileTypes:true}).sort((a,b)=>a.name<b.name?-1:a.name>b.name?1:0)){const path=join(dir,entry.name);if(entry.isDirectory())walk(path);else{if(!/\.(png|gz|bin)$/.test(path))writeFileSync(path,readFileSync(path,'utf8').replaceAll('\r\n','\n'));files.push('./'+path.slice(out.length+1).replaceAll('\\','/'));hash.update(readFileSync(path));}}}

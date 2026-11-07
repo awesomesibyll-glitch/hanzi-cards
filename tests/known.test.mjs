@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { openLibrary, snapshot, setWordKnown, setWordsKnown, saveReview, saveQuickRefresh, restoreBackup, validateBackup, syncPayload, mergeSync } from '../docs/storage.mjs';
+import { openLibrary, snapshot, setWordKnown, setWordsKnown, addToStudy, saveReview, saveQuickRefresh, restoreBackup, validateBackup, syncPayload, mergeSync } from '../docs/storage.mjs';
 import { studyQueue } from '../docs/study.mjs';
 import { knownWordIds, mergeKnownWords } from '../web/known.mjs';
 import { rankedReadings } from '../web/reading.mjs';
@@ -69,6 +69,15 @@ test('known words leave both queues without a review, free the daily slot, and s
   await setWordsKnown(seed.map(word=>word.id),false,now+6);
   assert.equal(knownWordIds((await snapshot()).knownWords).size,0);
   assert.deepEqual((await snapshot()).progress,previous.progress);
+  await setWordKnown(seed[0].id,true,now+7);
+  const listId=await addToStudy([seed[0].id,seed[1].id],'en','',now+8);
+  const added=await snapshot();
+  assert.equal(listId,'study-list-en');assert.deepEqual(added.sets[0].wordIds,[seed[0].id,seed[1].id]);
+  assert.equal(knownWordIds(added.knownWords).size,0);
+  assert.deepEqual(added.progress,previous.progress);assert.deepEqual(added.reviews,previous.reviews);
+  await addToStudy([seed[0].id],'en');assert.equal((await snapshot()).sets[0].wordIds.length,2);
+  const rawAdded=[...data.values()];await assert.rejects(addToStudy([seed[0].id],'zh'));assert.deepEqual([...data.values()],rawAdded);
+  await assert.rejects(addToStudy([seed[0].id],'en','missing'));assert.deepEqual([...data.values()],rawAdded);
 });
 
 test('known flags merge deterministically and newer learn-again changes win',()=>{

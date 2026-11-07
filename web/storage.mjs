@@ -169,6 +169,34 @@ export async function setMembership(setId,wordId,include){
     set.wordIds=[...members];
   });
 }
+export async function addToStudy(wordIds,course,setId='',now=Date.now()){
+  if(!Array.isArray(wordIds)||!wordIds.length||wordIds.length>30000||!Object.hasOwn(courseLanguages,course)||!Number.isSafeInteger(now)||now<0||now>8e15-1)throw new Error('Select words from one course.');
+  let destination;
+  await update(state=>{
+    const words=[...catalog.values(),...state.words],byId=new Map(words.map(word=>[word.id,word]));
+    const chosen=[...new Set(wordIds)].map(id=>byId.get(id));
+    if(chosen.some(word=>!inCourse(word,course)))throw new Error('A selected word is unavailable in this course.');
+    const sets=state.sets??=[];
+    let set=sets.find(item=>item.id===(setId||`study-list-${course}`));
+    if(setId&&(!set||set.course!==course))throw new Error('Choose an available study set.');
+    if(!set){
+      if(sets.length>=100)throw new Error('You have 100 sets. Choose an existing set first.');
+      let name='My study list',suffix=2;
+      while(sets.some(item=>item.course===course&&item.name.toLowerCase()===name.toLowerCase()))name=`My study list (${suffix++})`;
+      set={id:`study-list-${course}`,name,course,wordIds:[]};sets.push(set);
+    }
+    if(set.course!==course)throw new Error('This study list belongs to another course.');
+    set.wordIds=[...new Set([...set.wordIds,...chosen.map(word=>word.id)])];
+    const key=word=>JSON.stringify([word.sourceLanguage,word.targetLanguage,word.text.normalize('NFKC').trim().toLowerCase()]);
+    const spellings=new Set(chosen.map(key));
+    const records=new Map((state.knownWords??[]).map(record=>[record.wordId,record]));
+    for(const word of words)if(spellings.has(key(word))&&records.get(word.id)?.known){
+      const previous=records.get(word.id);records.set(word.id,{wordId:word.id,known:false,updatedAt:Math.max(now,previous.updatedAt+1)});
+    }
+    state.knownWords=[...records.values()];destination=set.id;
+  });
+  return destination;
+}
 
 export async function deleteSet(setId){
   await update(state=>{state.sets=(state.sets??[]).filter(set=>set.id!==setId);});

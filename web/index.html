@@ -26,6 +26,7 @@
       <div id="mistake-bar" hidden><button id="leave-mistakes" class="text-button">Back to regular study</button></div>
       <div id="active-set" class="active-set" hidden><span id="active-set-name"></span><button id="leave-set" class="text-button">Exit set</button></div>
       <div id="notice" role="status" aria-live="polite" hidden></div>
+      <button id="quick-search" class="text-button">Search words · add to study</button>
       <div class="toolbar"><label>Level<select id="level"><option value="0">All levels</option></select></label><label>Topic<select id="topic"><option value="">All topics</option></select></label></div>
       <section id="study" aria-label="Study card">
         <article class="flashcard" id="card" hidden>
@@ -144,7 +145,7 @@
     <p id="search-count" role="status"></p>
     <section class="bulk-word-tools" aria-label="Select multiple words">
       <div class="bulk-selection-heading"><label><input id="select-visible-words" type="checkbox"> Select visible words</label><span id="selected-word-count" role="status">0 selected</span></div>
-      <div id="bulk-word-actions" hidden><div class="bulk-word-buttons"><button id="bulk-mark-known" class="primary">Mark selected as known</button><button id="bulk-learn-again" class="secondary">Learn selected again</button></div><button id="clear-word-selection" class="text-button">Clear selection</button></div>
+      <div id="bulk-word-actions" hidden><button id="bulk-add-study" class="primary wide">Add selected to study</button><div class="bulk-word-buttons"><button id="bulk-mark-known" class="primary">Mark selected as known</button><button id="bulk-learn-again" class="secondary">Learn selected again</button></div><button id="clear-word-selection" class="text-button">Clear selection</button></div>
     </section>
     <ul id="search-results"></ul>
     <button id="more-results" class="secondary wide" hidden>Show more results</button>

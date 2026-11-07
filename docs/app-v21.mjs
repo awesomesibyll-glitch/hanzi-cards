@@ -1,5 +1,5 @@
 import { matchesStroke } from './modules/strokes.mjs';
-import { openLibrary, snapshot, saveReview, saveQuickRefresh, setWordsKnown, setConfusion, addWord, importWords, createSet, setMembership, deleteSet, restoreBackup, validateBackup, mergeSync, syncPayload, STORAGE_KEY } from './storage-v19.mjs';
+import { openLibrary, snapshot, saveReview, saveQuickRefresh, setWordsKnown, setConfusion, addToStudy, addWord, importWords, createSet, setMembership, deleteSet, restoreBackup, validateBackup, mergeSync, syncPayload, STORAGE_KEY } from './storage-v21.mjs';
 import { playAudio, stopAudio, audioPreference, availableVoices, englishAccent, prepareWordAudio } from './audio-v12.mjs';
 import { checkAnswer, checkDictation, clozeSentence, mistakeQueue, pinyinChoices, quickRefresh, resumableCard, studyQueue, studySchedule } from './study-v16.mjs';
 import { syncGitHub } from './sync.mjs';
@@ -414,6 +414,8 @@ function renderResults(){
     detail.textContent=`${word.reading} · ${word.translation}`;
     text.append(title,detail);row.append(text);
     const actions=document.createElement('div');actions.className='word-actions';
+    const learn=document.createElement('button');learn.className='secondary';learn.textContent='Add to study';
+    learn.setAttribute('aria-label',`Add to study: ${word.text}`);learn.onclick=()=>learnWords([word]);actions.append(learn);
     const knownButton=document.createElement('button'),isKnown=known.has(word.id);
     knownButton.className='text-button';knownButton.textContent=isKnown?'✓ Known · learn again':'I already know this';
     knownButton.setAttribute('aria-label',`${isKnown?'Learn again:':'Mark as known:'} ${word.text}`);
@@ -440,7 +442,7 @@ function renderBulkSelection(){
   $('select-visible-words').indeterminate=visibleSelected>0&&visibleSelected<visibleLibraryWords.length;
   $('select-visible-words').disabled=busy||!visibleLibraryWords.length;
   $('bulk-word-actions').hidden=!count;
-  for(const id of ['bulk-mark-known','bulk-learn-again','clear-word-selection'])$(id).disabled=busy||!count;
+  for(const id of ['bulk-add-study','bulk-mark-known','bulk-learn-again','clear-word-selection'])$(id).disabled=busy||!count;
   for(const checkbox of document.querySelectorAll('#search-results input[type=checkbox]'))checkbox.disabled=busy;
 }
 $('select-visible-words').onchange=event=>{
@@ -451,6 +453,17 @@ $('select-visible-words').onchange=event=>{
 };
 $('clear-word-selection').onclick=()=>{if(!busy){selectedLibraryWords.clear();renderResults();}};
 const selectedWords=()=>browseIndex.filter(entry=>selectedLibraryWords.has(entry.word.id)).map(entry=>entry.word);
+$('bulk-add-study').onclick=()=>learnWords(selectedWords());
+async function learnWords(words){
+  if(busy||!words.length)return;
+  const course=browseCourse(),setId=chosenSet()?.id??'';
+  const controls=['library-course','library-set','library-query','library-status-filter'];controls.forEach(id=>$(id).disabled=true);
+  let saved;try{saved=await changeSets(()=>addToStudy(words.map(word=>word.id),course,setId));}finally{controls.forEach(id=>$(id).disabled=false);}
+  if(saved){
+    selectedLibraryWords.clear();renderResults();
+    $('library-status').textContent=`${words.length} ${words.length===1?'word added':'words added'} to “${chosenSet()?.name}”. Tap Study this set to begin. Your daily limit and existing review dates still apply.`;
+  }
+}
 $('bulk-mark-known').onclick=()=>changeKnownWords(selectedWords(),true,true);
 $('bulk-learn-again').onclick=()=>changeKnownWords(selectedWords(),false,true);
 function refreshLibrary(selected=''){
@@ -482,6 +495,7 @@ $('open-library').onclick=()=>{
   $('library-status').textContent='';browseLimit=30;selectedLibraryWords.clear();
   refreshLibrary(activeSetId);openPanel('library-dialog');
 };
+$('quick-search').onclick=()=>$('open-library').click();
 $('library-course').onchange=()=>{browseLimit=30;selectedLibraryWords.clear();$('set-only').checked=false;refreshLibrary();};
 $('library-query').oninput=$('set-only').onchange=$('library-status-filter').onchange=()=>{browseLimit=30;selectedLibraryWords.clear();renderResults();};
 const changeKnown=(word,known)=>changeKnownWords([word],known);
