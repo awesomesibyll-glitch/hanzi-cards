@@ -11,7 +11,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" sizes="180x180" href="./icons/wen-touch.png">
   <link rel="icon" href="./icons/wen.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles-v17.css">
+  <link rel="stylesheet" href="./styles-v18.css">
   <title>Hanzi Cards</title>
 </head>
 <body>
@@ -42,6 +42,7 @@
           <button id="next-practice" class="primary wide" hidden>Next practice card</button>
           <p id="card-audio-status" class="audio-credit" role="status"></p><p id="recording-credit" class="audio-credit" hidden></p><div id="ratings" hidden><p>How well did you remember?</p><div class="rating-grid"></div></div>
           <button id="mark-known" class="text-button wide">I already know this</button>
+          <button id="link-confusion" class="text-button wide">I mix this up with…</button>
         </article>
         <div id="empty" class="empty" hidden><h2>All caught up</h2><p id="next-due">You're all caught up in this selection.</p><button id="refresh" class="primary">Check again</button></div>
       </section>
@@ -58,6 +59,7 @@
       <button id="audio-settings" class="menu-item">Audio</button>
       <button id="mistakes" class="menu-item" aria-pressed="false">Practise my mistakes</button>
       <button id="open-reading" class="menu-item">Mini texts</button>
+      <button id="open-pairs" class="menu-item">Words I mix up</button>
     </section>
     <section class="menu-group" aria-label="Library and data">
       <h3>Library &amp; data</h3>
@@ -74,6 +76,33 @@
       <button id="help" class="menu-item">Help &amp; installation</button>
       <p id="connection" class="connection-status" role="status">Preparing offline access…</p>
     </section>
+  </dialog>
+  <dialog id="pairs-dialog" aria-labelledby="pairs-title">
+    <form method="dialog"><button class="dialog-close" aria-label="Close word pairs">×</button></form>
+    <h2 id="pairs-title">Words I mix up</h2>
+    <div id="pair-editor">
+      <label>Course<select id="pair-course"><option value="zh">Chinese → English</option><option value="en">English → Russian</option></select></label>
+      <h3>Your pairs</h3><ul id="saved-pairs"></ul><p id="no-pairs">No pairs yet. Choose a suggestion or find two words below.</p>
+      <button id="start-pair-practice" class="primary wide" disabled>Practise my pairs</button>
+      <p id="pair-practice-help" hidden>Practice needs two words with different translations. Pairs containing words marked as known are excluded.</p>
+      <section id="pair-suggestions"><h3>Try a comparison</h3><div id="suggested-pairs"></div></section>
+      <form id="pair-form">
+        <label>First word<input id="pair-query-0" type="search" autocomplete="off" spellcheck="false" placeholder="Hanzi, pinyin or translation"></label><ul id="pair-results-0" class="pair-search-results"></ul>
+        <label>Second word<input id="pair-query-1" type="search" autocomplete="off" spellcheck="false" placeholder="Find the word you mix it up with"></label><ul id="pair-results-1" class="pair-search-results"></ul>
+        <label>How I tell them apart<textarea id="pair-note" maxlength="500" rows="2" placeholder="Optional note to help you remember"></textarea></label>
+        <div class="form-row"><button id="save-pair" class="primary" disabled>Save pair</button><button id="clear-pair-editor" type="button" class="text-button">New pair</button></div>
+      </form>
+      <div id="pair-preview"></div>
+    </div>
+    <div id="pair-practice" hidden>
+      <button id="exit-pair-practice" class="text-button">← My pairs</button>
+      <p id="pair-trial-counter" class="eyebrow"></p><p id="pair-practice-instruction">Choose the word that matches this meaning.</p>
+      <h3 id="pair-trial-prompt"></h3><div id="pair-trial-choices"></div>
+      <p id="pair-trial-feedback" role="status" aria-live="polite"></p>
+      <button id="next-pair-trial" class="primary wide" hidden>Next</button><div id="pair-trial-answer"></div>
+      <p>Extra practice keeps your review schedule and daily new-word allowance unchanged.</p>
+    </div>
+    <p id="pair-status" role="status" aria-live="polite"></p>
   </dialog>
   <dialog id="reading-dialog" aria-labelledby="reading-title">
     <form method="dialog"><button class="dialog-close" aria-label="Close mini texts">×</button></form>
@@ -154,5 +183,5 @@
   <dialog id="audio-dialog"><button id="close-audio" class="dialog-close" aria-label="Close audio settings">×</button><span class="eyebrow">PRONUNCIATION</span><h2>Audio</h2><label class="audio-setting"><input id="auto-audio" type="checkbox"> Play words automatically</label><label>English accent<select id="english-accent"><option value="en-US">American English (US)</option><option value="en-GB">British English (UK)</option></select></label><label>Word pronunciation<select id="recording-mode"><option value="prefer">Prefer human recordings when available</option><option value="system">System voices only (offline)</option></select></label><p>Human recordings are prepared for the current visible word and cached for offline replay. If a recording is unavailable, words and sentences use a matching voice on this device.</p><label>Chinese system voice<select id="voice-zh-CN"></select></label><label>English system voice<select id="voice-en-US"></select></label><label>Russian system voice<select id="voice-ru-RU"></select></label><label>Speed <output id="rate-value">1×</output><input id="speech-rate" type="range" min="0.7" max="1.2" step="0.05" value="1"></label><p>For better Chinese speech, download an Enhanced/Premium Mandarin voice in iPhone Settings → Accessibility → speech/reading settings, then reopen this app. Only voices exposed by Safari can be selected.</p><button id="test-voice" class="primary wide">Play current word</button><p id="audio-preview-status" role="status"></p></dialog>
   <dialog id="study-dialog"><form method="dialog" id="study-form"><button type="button" class="dialog-close" id="close-study" aria-label="Close study settings">×</button><span class="eyebrow">MAKE IT YOURS</span><h2>Study settings</h2><label>Study mode<select id="study-mode"><option value="classic">Classic flashcards</option><option value="recall">Type the answer</option><option value="reverse-classic">Reverse flashcards</option><option value="reverse-recall">Reverse · type the answer</option><option value="cloze">Fill the gap</option><option value="listen-word">Dictation · word</option><option value="listen-sentence">Dictation · sentence</option><option value="listen-tones">Dictation · pinyin tones</option></select></label><label>New words per day<select id="daily-limit"><option value="10">10</option><option value="20">20</option><option value="50">50</option></select></label><p>Dictation hides the answer until you check it. Pinyin tones apply to Chinese. Reverse cards show the translation first and have a separate schedule. The new-word limit is shared across courses and directions. Reviews of previously studied cards always remain available.</p><button class="primary wide">Save settings</button></form></dialog>
   <noscript>This study app needs JavaScript enabled to save and review cards.</noscript>
-  <script type="module" src="./app-v17.mjs"></script>
+  <script type="module" src="./app-v18.mjs"></script>
 </body></html>

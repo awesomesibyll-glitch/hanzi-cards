@@ -19,4 +19,5 @@ jobs:
       - run: node --test tests/catalog.test.mjs
       - run: node --test tests/reading.test.mjs
       - run: node --test tests/known.test.mjs
+      - run: node --test tests/confusions.test.mjs
       - run: git diff --exit-code -- docs

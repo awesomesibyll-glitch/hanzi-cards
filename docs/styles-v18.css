@@ -179,6 +179,30 @@ noscript { display: block; padding: 25px; text-align: center; }
 .word-select { grid-column:1; grid-row:1 / span 2; align-self:start; display:flex; align-items:center; justify-content:center; min-height:44px; }
 .word-select input { width:19px; height:19px; }
 #search-results .word-actions { grid-column:2; justify-content:flex-start; }
+#pairs-dialog { width:min(640px,calc(100vw - 24px)); }
+#pair-form { display:grid; gap:10px; margin-top:18px; }
+.pair-search-results, #saved-pairs { list-style:none; margin:0; padding:0; }
+.pair-search-results:empty, #pair-status:empty { display:none; }
+.pair-search-choice { display:block; width:100%; padding:10px; border:1px solid var(--line); border-radius:10px; background:var(--surface); color:var(--ink); text-align:left; }
+.pair-search-choice strong, .pair-search-choice small { display:block; }
+.pair-search-choice small { margin-top:4px; color:var(--muted); }
+#saved-pairs li, #suggested-pairs { display:flex; gap:7px; flex-wrap:wrap; align-items:center; }
+#saved-pairs { margin-bottom:10px; }
+.pair-comparison { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-top:16px; }
+.pair-word { padding:14px; border:1px solid var(--line); border-radius:15px; background:var(--surface); overflow-wrap:anywhere; }
+.pair-word-heading { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; }
+.pair-word-heading strong { font-size:25px; }
+.pair-reading { color:var(--accent-deep); }
+.pair-meaning { color:var(--ink); font-weight:650; }
+.pair-sentence { padding-top:10px; border-top:1px solid var(--line); color:var(--ink); }
+.pair-note { grid-column:1/-1; padding:12px; border-radius:12px; background:var(--sky); }
+#pair-trial-prompt { font-size:23px; line-height:1.5; overflow-wrap:anywhere; }
+#pair-trial-choices { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:18px; }
+#pair-trial-choices button { min-height:64px; font-size:23px; overflow-wrap:anywhere; }
+#pair-trial-feedback[data-correct] { padding:12px; border-radius:10px; }
+#pair-trial-feedback[data-correct=true] { background:var(--mint); color:var(--success); }
+#pair-trial-feedback[data-correct=false] { background:var(--peach); color:var(--error); }
+@media (max-width:480px) { .pair-comparison { grid-template-columns:1fr; } }
 .import-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
 #import-status:empty, #import-preview:empty { display:none; }
 #import-preview { list-style:none; padding:0; margin:8px 0 0; }

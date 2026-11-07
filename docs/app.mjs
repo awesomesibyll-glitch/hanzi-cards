@@ -1,5 +1,5 @@
 import { matchesStroke } from './modules/strokes.mjs';
-import { openLibrary, snapshot, saveReview, saveQuickRefresh, setWordsKnown, addWord, importWords, createSet, setMembership, deleteSet, restoreBackup, validateBackup, mergeSync, syncPayload, STORAGE_KEY } from './storage.mjs';
+import { openLibrary, snapshot, saveReview, saveQuickRefresh, setWordsKnown, setConfusion, addWord, importWords, createSet, setMembership, deleteSet, restoreBackup, validateBackup, mergeSync, syncPayload, STORAGE_KEY } from './storage.mjs';
 import { playAudio, stopAudio, audioPreference, availableVoices, englishAccent, prepareWordAudio } from './audio.mjs';
 import { checkAnswer, checkDictation, clozeSentence, mistakeQueue, pinyinChoices, quickRefresh, resumableCard, studyQueue, studySchedule } from './study.mjs';
 import { syncGitHub } from './sync.mjs';
@@ -7,6 +7,7 @@ import { findWords, indexWords, wordsInSet } from './library.mjs';
 import { previewImport } from './import-list.mjs';
 import { mountReading } from './reading.mjs';
 import { knownWordIds } from './known.mjs';
+import { mountConfusions } from './confusions.mjs';
 const $=id=>document.getElementById(id);
 const openPanel=id=>{$('menu-dialog').close();$(id).showModal();};
 for(const gesture of ['gesturestart','gesturechange'])document.addEventListener(gesture,event=>event.preventDefault(),{passive:false});
@@ -52,6 +53,16 @@ const selectedLibraryWords=new Set();
 let visibleLibraryWords=[];
 const activeSet=()=>library.sets.find(set=>set.id===activeSetId&&set.course===deck);
 const deckWords=(course=deck)=>library.words.filter(w=>w.sourceLanguage===DECKS[course].source&&w.targetLanguage===DECKS[course].target);
+const pairTools=mountConfusions({
+  getLibrary:()=>library,getCourse:()=>deck,getCard:()=>card,canOpen:()=>!busy,
+  openPanel,savePair:setConfusion,stop:stopAudio,
+  prepare:word=>prepareWordAudio(word.text,word.sourceLanguage,word.reading),
+  play:(text,language,status,options)=>playAudio(text,language,status,options),
+  mutate:async action=>{
+    if(busy)throw new Error('Wait for the current save to finish.');
+    busy=true;try{await action();await reload();}finally{busy=false;}
+  }
+});
 mountReading({
   getLibrary:()=>library,course:()=>deck,levels:course=>DECKS[course].labels,
   openPanel,preference:safePreference,stop:stopAudio,createSet,
@@ -183,6 +194,7 @@ function showNext(){
   $('card-category').textContent=reverse?`${level} · Reverse`:level;
   $('card-status').textContent=mistakeSession?'MISTAKE PRACTICE':refreshing?'QUICK REFRESH':card.due===0?'NEW WORD':'REVIEW';
   $('mark-known').hidden=Boolean(active||reverse);
+  $('link-confusion').hidden=Boolean(active||reverse);
   $('answer').hidden=true;$('ratings').hidden=true;$('reveal').hidden=active;$('card-prompt').hidden=!active;
   $('card-prompt').textContent=dictation==='listen-tones'?'Listen and type pinyin with tone marks or numbers, such as ni3.':
     dictation==='listen-sentence'?(deck==='zh'?'Listen and type the whole sentence in Hanzi.':'Listen and type the whole sentence.'):
@@ -227,6 +239,7 @@ function reveal(checked=false,restoring=false){
   if(!card||revealed||(busy&&!restoring)||(recallMode()&&checked!==true))return;
   revealed=true;$('answer').hidden=false;$('ratings').hidden=mistakeSession||refreshing;$('reveal').hidden=true;$('card-prompt').hidden=true;
   $('mark-known').hidden=false;
+  $('link-confusion').hidden=false;
   $('skip-practice').hidden=true;$('next-practice').hidden=!mistakeSession&&!refreshing;
   $('recall-form').hidden=true;$('play-zh').hidden=false;
   $('word').hidden=false;
@@ -373,6 +386,8 @@ function renderResults(){
     knownButton.setAttribute('aria-label',`${isKnown?'Learn again:':'Mark as known:'} ${word.text}`);
     knownButton.onclick=()=>changeKnown(word,!isKnown);
     actions.append(knownButton);
+    const compare=document.createElement('button');compare.className='text-button';compare.textContent='Compare…';
+    compare.setAttribute('aria-label',`Find a confusing word for ${word.text}`);compare.onclick=()=>pairTools.openForWord(word);actions.append(compare);
     if(set){
       const included=members.has(word.id),button=document.createElement('button');
       button.className='secondary';button.textContent=included?'Remove':'Add';

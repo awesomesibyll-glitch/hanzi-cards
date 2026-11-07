@@ -1,6 +1,7 @@
 import { studyQueue, studySchedule, withContext } from './study-v16.mjs';
 import { importWordKey } from './import-list.mjs';
 import { knownWordIds, validateKnownWords, mergeKnownWords } from './known.mjs';
+import { pairKey, validateConfusions, mergeConfusions } from './confusions.mjs';
 export const RATINGS = ['Again', 'Hard', 'Good', 'Easy'];
 export const STORAGE_KEY = 'hanzi-study-v4';
 let catalog;
@@ -48,7 +49,17 @@ export async function snapshot() {
     const item=saved.get(w.id)??freshProgress(w.id);
     return {...item,status:!item.due?'new':item.repetitions?'review':'learning'};
   });
-  return {version:1,exportedAt:new Date().toISOString(),words,progress,reviews:state.reviews,knownWords,reverseProgress:state.reverseProgress??[],reverseReviews:state.reverseReviews??[],sets:state.sets??[],refreshes:state.refreshes??{},attribution:[{source:'Complete HSK Vocabulary / CC-CEDICT',url:'https://github.com/drkameleon/complete-hsk-vocabulary',license:'CC BY-SA 4.0 (adapted dictionary fields)'},{source:'Vocab Bloom Hub',url:'https://huggingface.co/datasets/Fristail27/vocab-bloom-hub-en',license:'CC BY 4.0',notice:'AI-generated, not human-verified; translations and CEFR levels may contain errors.'}]};
+  return {version:1,exportedAt:new Date().toISOString(),words,progress,reviews:state.reviews,knownWords,confusions:state.confusions??[],reverseProgress:state.reverseProgress??[],reverseReviews:state.reverseReviews??[],sets:state.sets??[],refreshes:state.refreshes??{},attribution:[{source:'Complete HSK Vocabulary / CC-CEDICT',url:'https://github.com/drkameleon/complete-hsk-vocabulary',license:'CC BY-SA 4.0 (adapted dictionary fields)'},{source:'Vocab Bloom Hub',url:'https://huggingface.co/datasets/Fristail27/vocab-bloom-hub-en',license:'CC BY 4.0',notice:'AI-generated, not human-verified; translations and CEFR levels may contain errors.'}]};
+}
+export async function setConfusion(wordIds,active,note='',now=Date.now()){
+  if(!Number.isSafeInteger(now)||now<0||now>8e15-1)throw new Error('Invalid word-pair date.');
+  await update(state=>{
+    const words=[...catalog.values(),...state.words];
+    const record={wordIds,active,note,updatedAt:now};validateConfusions([record],words);
+    const previous=(state.confusions??[]).find(pair=>pairKey(pair.wordIds)===pairKey(wordIds));
+    record.updatedAt=Math.max(now,(previous?.updatedAt??-1)+1);
+    state.confusions=mergeConfusions(state.confusions,[[record]],words);
+  });
 }
 export async function setWordKnown(wordId,known,now=Date.now()){
   return setWordsKnown([wordId],known,now);
@@ -196,6 +207,7 @@ export function validateBackup(data){
   if(data?.version!==1)throw new Error('Unsupported backup version.');
   const ids=validateWords(data.words);
   if(data.knownWords!==undefined)validateKnownWords(data.knownWords,ids);
+  if(data.confusions!==undefined)validateConfusions(data.confusions,data.words);
   validateHistory(data.progress,data.reviews,ids,true);
   validateHistory(data.reverseProgress===undefined?[]:data.reverseProgress,data.reverseReviews===undefined?[]:data.reverseReviews,ids,false);
   if(data.sets!==undefined)validateSets(data.sets,data.words);
@@ -222,7 +234,8 @@ export async function restoreBackup(data) {
     reverseReviews:data.reverseReviews??[],
     sets:data.sets??[],
     refreshes:data.refreshes??{},
-    knownWords:data.knownWords??[]
+    knownWords:data.knownWords??[],
+    confusions:data.confusions??[]
   }));
 }
 
@@ -231,12 +244,13 @@ const reviewKey = ({wordId, rating, reviewedAt}) => JSON.stringify([wordId, rati
 const compareReviews = (a, b) => a.reviewedAt - b.reviewedAt || RATINGS.indexOf(a.rating) - RATINGS.indexOf(b.rating);
 
 const syncReviews=reviews=>reviews.map(({wordId,rating,reviewedAt,rule,mistake})=>({wordId,rating,reviewedAt,rule,...(mistake===true&&{mistake:true})}));
-export function syncPayload({words, reviews, reverseReviews=[],knownWords=[]}) {
+export function syncPayload({words, reviews, reverseReviews=[],knownWords=[],confusions=[]}) {
   return {
     version:1,
     words:words.filter(word => word.id.startsWith('custom-')),
     reviews:syncReviews(reviews),
     ...(knownWords.length&&{knownWords}),
+    ...(confusions.length&&{confusions}),
     ...(reverseReviews.length&&{reverseReviews:syncReviews(reverseReviews)})
   };
 }
@@ -302,6 +316,7 @@ export async function mergeSync(backups) {
     state.words.push(...changes.words);
     const ids=new Set([...catalog.keys(),...state.words.map(word=>word.id)]);
     state.knownWords=mergeKnownWords(state.knownWords,backups.map(backup=>backup.knownWords??[]),ids);
+    state.confusions=mergeConfusions(state.confusions,backups.map(backup=>backup.confusions??[]),[...catalog.values(),...state.words]);
     state.progress=applyHistory(state.progress,state.reviews,changes);
     const reverseBackups=backups.filter(backup=>backup.reverseReviews!==undefined)
       .map(backup=>({version:1,words:[],reviews:backup.reverseReviews}));

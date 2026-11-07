@@ -42,6 +42,7 @@
           <button id="next-practice" class="primary wide" hidden>Next practice card</button>
           <p id="card-audio-status" class="audio-credit" role="status"></p><p id="recording-credit" class="audio-credit" hidden></p><div id="ratings" hidden><p>How well did you remember?</p><div class="rating-grid"></div></div>
           <button id="mark-known" class="text-button wide">I already know this</button>
+          <button id="link-confusion" class="text-button wide">I mix this up with…</button>
         </article>
         <div id="empty" class="empty" hidden><h2>All caught up</h2><p id="next-due">You're all caught up in this selection.</p><button id="refresh" class="primary">Check again</button></div>
       </section>
@@ -58,6 +59,7 @@
       <button id="audio-settings" class="menu-item">Audio</button>
       <button id="mistakes" class="menu-item" aria-pressed="false">Practise my mistakes</button>
       <button id="open-reading" class="menu-item">Mini texts</button>
+      <button id="open-pairs" class="menu-item">Words I mix up</button>
     </section>
     <section class="menu-group" aria-label="Library and data">
       <h3>Library &amp; data</h3>
@@ -74,6 +76,33 @@
       <button id="help" class="menu-item">Help &amp; installation</button>
       <p id="connection" class="connection-status" role="status">Preparing offline access…</p>
     </section>
+  </dialog>
+  <dialog id="pairs-dialog" aria-labelledby="pairs-title">
+    <form method="dialog"><button class="dialog-close" aria-label="Close word pairs">×</button></form>
+    <h2 id="pairs-title">Words I mix up</h2>
+    <div id="pair-editor">
+      <label>Course<select id="pair-course"><option value="zh">Chinese → English</option><option value="en">English → Russian</option></select></label>
+      <h3>Your pairs</h3><ul id="saved-pairs"></ul><p id="no-pairs">No pairs yet. Choose a suggestion or find two words below.</p>
+      <button id="start-pair-practice" class="primary wide" disabled>Practise my pairs</button>
+      <p id="pair-practice-help" hidden>Practice needs two words with different translations. Pairs containing words marked as known are excluded.</p>
+      <section id="pair-suggestions"><h3>Try a comparison</h3><div id="suggested-pairs"></div></section>
+      <form id="pair-form">
+        <label>First word<input id="pair-query-0" type="search" autocomplete="off" spellcheck="false" placeholder="Hanzi, pinyin or translation"></label><ul id="pair-results-0" class="pair-search-results"></ul>
+        <label>Second word<input id="pair-query-1" type="search" autocomplete="off" spellcheck="false" placeholder="Find the word you mix it up with"></label><ul id="pair-results-1" class="pair-search-results"></ul>
+        <label>How I tell them apart<textarea id="pair-note" maxlength="500" rows="2" placeholder="Optional note to help you remember"></textarea></label>
+        <div class="form-row"><button id="save-pair" class="primary" disabled>Save pair</button><button id="clear-pair-editor" type="button" class="text-button">New pair</button></div>
+      </form>
+      <div id="pair-preview"></div>
+    </div>
+    <div id="pair-practice" hidden>
+      <button id="exit-pair-practice" class="text-button">← My pairs</button>
+      <p id="pair-trial-counter" class="eyebrow"></p><p id="pair-practice-instruction">Choose the word that matches this meaning.</p>
+      <h3 id="pair-trial-prompt"></h3><div id="pair-trial-choices"></div>
+      <p id="pair-trial-feedback" role="status" aria-live="polite"></p>
+      <button id="next-pair-trial" class="primary wide" hidden>Next</button><div id="pair-trial-answer"></div>
+      <p>Extra practice keeps your review schedule and daily new-word allowance unchanged.</p>
+    </div>
+    <p id="pair-status" role="status" aria-live="polite"></p>
   </dialog>
   <dialog id="reading-dialog" aria-labelledby="reading-title">
     <form method="dialog"><button class="dialog-close" aria-label="Close mini texts">×</button></form>
