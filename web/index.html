@@ -43,6 +43,7 @@
           <button id="next-practice" class="primary wide" hidden>Next practice card</button>
           <p id="card-audio-status" class="audio-credit" role="status"></p><p id="recording-credit" class="audio-credit" hidden></p><div id="ratings" hidden><p>How well did you remember?</p><div class="rating-grid"></div></div>
           <button id="mark-known" class="text-button wide">I already know this</button>
+          <button id="edit-current-word" class="text-button wide">Edit word / report a mistake</button>
           <button id="link-confusion" class="text-button wide">I mix this up with…</button>
         </article>
         <div id="empty" class="empty" hidden><h2>All caught up</h2><p id="next-due">You're all caught up in this selection.</p><button id="refresh" class="primary">Check again</button></div>
@@ -78,6 +79,7 @@
       <p id="connection" class="connection-status" role="status">Preparing offline access…</p>
     </section>
   </dialog>
+<dialog id="edit-word-dialog" aria-labelledby="edit-word-title"><form method="dialog"><button class="dialog-close" aria-label="Close word editor">×</button></form><h2 id="edit-word-title"></h2><p>Your correction applies on this device and is included in backups and GitHub Sync. Your review history stays intact.</p><form id="edit-word-form"><label><span id="edit-reading-label">Pinyin with tones</span><input id="edit-reading" required maxlength="120"></label><label>Translation<input id="edit-translation" required maxlength="500"></label><label>Example sentence<textarea id="edit-sentence" required maxlength="700" rows="2"></textarea></label><label>Example translation<textarea id="edit-sentenceTranslation" required maxlength="700" rows="2"></textarea></label><button id="edit-save" class="primary wide">Save correction</button><button id="edit-reset" type="button" class="text-button wide">Restore dictionary version</button><p id="edit-word-status" role="status"></p></form></dialog>
   <dialog id="pairs-dialog" aria-labelledby="pairs-title">
     <form method="dialog"><button class="dialog-close" aria-label="Close word pairs">×</button></form>
     <h2 id="pairs-title">Words I mix up</h2>

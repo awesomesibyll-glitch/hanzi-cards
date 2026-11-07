@@ -237,3 +237,5 @@ noscript { display: block; padding: 25px; text-align: center; }
 .mode-options legend { font-size:14px; font-weight:650; }
 .mode-options label { display:flex; gap:10px; align-items:center; min-height:44px; font-size:14px; }
 #mode-error:empty { display:none; }
+
+#edit-word-form { display:grid; gap:12px; }

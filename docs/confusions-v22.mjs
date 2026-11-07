@@ -16,6 +16,7 @@ const contrastMeanings=new Map([
   ['zh-CN:再',['zài','again; once more']],['zh-CN:在',['zài','at; in; marks an action in progress']]
 ]);
 export function contrastWord(word){
+  if(word.personalEdit)return word;
   const meaning=contrastMeanings.get(`${word.sourceLanguage}:${fold(word.text)}`);
   return meaning?{...word,reading:meaning[0],translation:meaning[1]}:word;
 }
@@ -117,7 +118,7 @@ export function mountConfusions({getLibrary,getCourse,getCard,canOpen,openPanel,
       heading.append(title,listen);
       const reading=node('p',word.reading,'pair-reading');reading.lang=word.sourceLanguage==='zh-CN'?'zh-Latn':'en';
       const meaning=node('p',word.translation,'pair-meaning');meaning.lang=word.targetLanguage;
-      const example=contrastExamples.get(`${word.sourceLanguage}:${fold(word.text)}`)??[word.sentence,word.sentenceTranslation];
+      const example=word.personalEdit?[word.sentence,word.sentenceTranslation]:(contrastExamples.get(`${word.sourceLanguage}:${fold(word.text)}`)??[word.sentence,word.sentenceTranslation]);
       const sentence=node('p',example[0],'pair-sentence');sentence.lang=word.sourceLanguage;
       const translation=node('p',example[1],'pair-sentence-translation');translation.lang=word.targetLanguage;
       const hear=node('button','Listen to example','text-button');hear.onclick=()=>play(example[0],word.sourceLanguage,status);

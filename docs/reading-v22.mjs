@@ -16,6 +16,7 @@ export function readingIndex(story,words){
   }
   for(const gloss of story.glossary){
     const existing=entries.get(fold(gloss.text));
+    if(existing?.personalEdit)continue;
     entries.set(fold(gloss.text),{...existing,...gloss,
       reading:gloss.reading||existing?.reading||'',level:story.level,topic:'Mini texts',
       sourceLanguage:language,targetLanguage:target});
