@@ -17,4 +17,5 @@ jobs:
       - run: node --check docs/app.mjs
       - run: node --test tests/web.test.mjs
       - run: node --test tests/catalog.test.mjs
+      - run: node --test tests/reading.test.mjs
       - run: git diff --exit-code -- docs

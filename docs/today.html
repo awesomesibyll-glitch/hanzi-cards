@@ -11,7 +11,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" sizes="180x180" href="./icons/wen-touch.png">
   <link rel="icon" href="./icons/wen.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles-v11.css">
+  <link rel="stylesheet" href="./styles-v15.css">
   <title>Hanzi Cards</title>
 </head>
 <body>
@@ -56,6 +56,7 @@
       <button id="study-settings" class="menu-item">Study settings</button>
       <button id="audio-settings" class="menu-item">Audio</button>
       <button id="mistakes" class="menu-item" aria-pressed="false">Practise my mistakes</button>
+      <button id="open-reading" class="menu-item">Mini texts</button>
     </section>
     <section class="menu-group" aria-label="Library and data">
       <h3>Library &amp; data</h3>
@@ -72,6 +73,29 @@
       <button id="help" class="menu-item">Help &amp; installation</button>
       <p id="connection" class="connection-status" role="status">Preparing offline access…</p>
     </section>
+  </dialog>
+  <dialog id="reading-dialog" aria-labelledby="reading-title">
+    <form method="dialog"><button class="dialog-close" aria-label="Close mini texts">×</button></form>
+    <h2 id="reading-title">Mini texts</h2>
+    <div id="reading-picker">
+      <div class="form-row"><label>Course<select id="reading-course"><option value="zh">Chinese → English</option><option value="en">English → Russian</option></select></label><label>Reading level<select id="reading-level"></select></label></div>
+      <p>Start with the most familiar vocabulary, based on your card reviews. Reading levels are approximate.</p>
+      <ul id="reading-list"></ul><p id="reading-empty" hidden>More texts at this level are coming. Choose All levels to see the available dialogues.</p>
+    </div>
+    <div id="reading-detail" hidden>
+      <button id="reading-back" class="text-button">← All texts</button>
+      <h3 id="reading-story-title"></h3><p id="reading-story-meta"></p>
+      <p>Tap an underlined word for its meaning<span> and, in Chinese, its pinyin</span>.</p>
+      <div id="reading-lines"></div>
+      <section id="reading-word-panel" aria-label="Selected word" hidden>
+        <div class="reading-word-heading"><strong id="reading-word"></strong><button id="reading-listen-word" class="secondary" aria-label="Listen to selected word">Listen</button></div>
+        <p id="reading-pinyin"></p><p id="reading-meaning" aria-live="polite"></p>
+        <label>Save to study set<select id="reading-set"></select></label>
+        <button id="reading-add" class="primary wide" disabled>Add word to set</button>
+      </section>
+      <details class="reading-create-section"><summary>Create a study set</summary><form id="reading-create"><label>Set name<input id="reading-set-name" maxlength="60" required placeholder="Words from reading"></label><button id="reading-create-button" class="secondary">Create set</button></form></details>
+    </div>
+    <p id="reading-status" role="status" aria-live="polite"></p>
   </dialog>
   <dialog id="library-dialog" aria-labelledby="library-title">
     <form method="dialog"><button class="dialog-close" aria-label="Close search and study sets">×</button></form>
@@ -123,5 +147,5 @@
   <dialog id="audio-dialog"><button id="close-audio" class="dialog-close" aria-label="Close audio settings">×</button><span class="eyebrow">PRONUNCIATION</span><h2>Audio</h2><label class="audio-setting"><input id="auto-audio" type="checkbox"> Play words automatically</label><label>English accent<select id="english-accent"><option value="en-US">American English (US)</option><option value="en-GB">British English (UK)</option></select></label><label>Word pronunciation<select id="recording-mode"><option value="prefer">Prefer human recordings when available</option><option value="system">System voices only (offline)</option></select></label><p>Human recordings are prepared for the current visible word and cached for offline replay. If a recording is unavailable, words and sentences use a matching voice on this device.</p><label>Chinese system voice<select id="voice-zh-CN"></select></label><label>English system voice<select id="voice-en-US"></select></label><label>Russian system voice<select id="voice-ru-RU"></select></label><label>Speed <output id="rate-value">1×</output><input id="speech-rate" type="range" min="0.7" max="1.2" step="0.05" value="1"></label><p>For better Chinese speech, download an Enhanced/Premium Mandarin voice in iPhone Settings → Accessibility → speech/reading settings, then reopen this app. Only voices exposed by Safari can be selected.</p><button id="test-voice" class="primary wide">Play current word</button><p id="audio-preview-status" role="status"></p></dialog>
   <dialog id="study-dialog"><form method="dialog" id="study-form"><button type="button" class="dialog-close" id="close-study" aria-label="Close study settings">×</button><span class="eyebrow">MAKE IT YOURS</span><h2>Study settings</h2><label>Study mode<select id="study-mode"><option value="classic">Classic flashcards</option><option value="recall">Type the answer</option><option value="reverse-classic">Reverse flashcards</option><option value="reverse-recall">Reverse · type the answer</option><option value="cloze">Fill the gap</option><option value="listen-word">Dictation · word</option><option value="listen-sentence">Dictation · sentence</option><option value="listen-tones">Dictation · pinyin tones</option></select></label><label>New words per day<select id="daily-limit"><option value="10">10</option><option value="20">20</option><option value="50">50</option></select></label><p>Dictation hides the answer until you check it. Pinyin tones apply to Chinese. Reverse cards show the translation first and have a separate schedule. The new-word limit is shared across courses and directions. Reviews of previously studied cards always remain available.</p><button class="primary wide">Save settings</button></form></dialog>
   <noscript>This study app needs JavaScript enabled to save and review cards.</noscript>
-  <script type="module" src="./app-v14.mjs"></script>
+  <script type="module" src="./app-v15.mjs"></script>
 </body></html>

@@ -5,6 +5,7 @@ import { checkAnswer, checkDictation, clozeSentence, mistakeQueue, pinyinChoices
 import { syncGitHub } from './sync.mjs';
 import { findWords, indexWords, wordsInSet } from './library.mjs';
 import { previewImport } from './import-list.mjs';
+import { mountReading } from './reading.mjs';
 const $=id=>document.getElementById(id);
 const openPanel=id=>{$('menu-dialog').close();$(id).showModal();};
 for(const gesture of ['gesturestart','gesturechange'])document.addEventListener(gesture,event=>event.preventDefault(),{passive:false});
@@ -48,6 +49,29 @@ let deck=safePreference('hanzi-deck')==='en'?'en':'zh';
 let activeSetId='',browseIndex=[],browseLimit=30;
 const activeSet=()=>library.sets.find(set=>set.id===activeSetId&&set.course===deck);
 const deckWords=(course=deck)=>library.words.filter(w=>w.sourceLanguage===DECKS[course].source&&w.targetLanguage===DECKS[course].target);
+mountReading({
+  getLibrary:()=>library,course:()=>deck,levels:course=>DECKS[course].labels,
+  openPanel,preference:safePreference,stop:stopAudio,createSet,
+  play:(text,language,status,options)=>playAudio(text,language,status,options),
+  prepare:word=>prepareWordAudio(word.text,word.sourceLanguage,word.reading),
+  mutate:async action=>{
+    if(busy)throw new Error('Wait for the current save to finish.');
+    busy=true;
+    try{const after=await action();await reload();after?.();}
+    finally{busy=false;}
+  },
+  saveWord:async(word,course,setId)=>{
+    if(!setId)throw new Error('Choose a study set first.');
+    if(word.id){await setMembership(setId,word.id,true);return word.id;}
+    await importWords([word],course,setId);
+    // Resolve a simultaneous import or an existing spelling before linking the set.
+    const data=await snapshot();
+    const saved=data.words.find(item=>item.sourceLanguage===word.sourceLanguage&&item.targetLanguage===word.targetLanguage&&item.text.normalize('NFKC').toLowerCase()===word.text.normalize('NFKC').toLowerCase());
+    if(!saved)throw new Error('Could not find the saved word. Please retry.');
+    await setMembership(setId,saved.id,true);
+    return saved.id;
+  }
+});
 const sessionKey='hanzi-session-v1';
 function readSession(){
   try{return JSON.parse(safePreference(sessionKey));}catch{return null;}
