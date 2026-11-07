@@ -169,6 +169,16 @@ noscript { display: block; padding: 25px; text-align: center; }
 #mark-known { margin-top:10px; color:var(--muted); font-weight:500; }
 .known-help summary { min-height:44px; padding-top:10px; font-size:13px; color:var(--muted); cursor:pointer; }
 @media (max-width:400px) { .word-actions { flex-basis:110px; } }
+.bulk-word-tools { position:sticky; top:-23px; z-index:1; padding:10px; margin:8px 0; border:1px solid var(--line); border-radius:13px; background:#edf6fc; }
+.bulk-selection-heading { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:5px 12px; }
+.bulk-selection-heading label { display:flex; align-items:center; gap:8px; min-height:44px; font-size:13px; }
+#selected-word-count { font-size:12px; color:var(--muted); }
+.bulk-word-buttons { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:5px; }
+.bulk-word-buttons button { font-size:13px; }
+#search-results li { display:grid; grid-template-columns:36px minmax(0,1fr); gap:3px 8px; }
+.word-select { grid-column:1; grid-row:1 / span 2; align-self:start; display:flex; align-items:center; justify-content:center; min-height:44px; }
+.word-select input { width:19px; height:19px; }
+#search-results .word-actions { grid-column:2; justify-content:flex-start; }
 .import-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
 #import-status:empty, #import-preview:empty { display:none; }
 #import-preview { list-style:none; padding:0; margin:8px 0 0; }

@@ -51,12 +51,21 @@ export async function snapshot() {
   return {version:1,exportedAt:new Date().toISOString(),words,progress,reviews:state.reviews,knownWords,reverseProgress:state.reverseProgress??[],reverseReviews:state.reverseReviews??[],sets:state.sets??[],refreshes:state.refreshes??{},attribution:[{source:'Complete HSK Vocabulary / CC-CEDICT',url:'https://github.com/drkameleon/complete-hsk-vocabulary',license:'CC BY-SA 4.0 (adapted dictionary fields)'},{source:'Vocab Bloom Hub',url:'https://huggingface.co/datasets/Fristail27/vocab-bloom-hub-en',license:'CC BY 4.0',notice:'AI-generated, not human-verified; translations and CEFR levels may contain errors.'}]};
 }
 export async function setWordKnown(wordId,known,now=Date.now()){
+  return setWordsKnown([wordId],known,now);
+}
+export async function setWordsKnown(wordIds,known,now=Date.now()){
   if(typeof known!=='boolean'||!Number.isSafeInteger(now)||now<0||now>8e15-1)throw new Error('Invalid known-word change.');
+  if(!Array.isArray(wordIds)||!wordIds.length||wordIds.length>30000||wordIds.some(id=>typeof id!=='string'||!id||id.length>500))throw new Error('Select at least one valid word.');
   await update(state=>{
-    const words=[...catalog.values(),...state.words],word=words.find(item=>item.id===wordId);
-    if(!word)throw new Error('This word is no longer available.');
-    const spelling=text=>text.normalize('NFKC').trim().toLowerCase();
-    const matching=words.filter(item=>item.sourceLanguage===word.sourceLanguage&&item.targetLanguage===word.targetLanguage&&spelling(item.text)===spelling(word.text));
+    const words=[...catalog.values(),...state.words],byId=new Map(words.map(word=>[word.id,word]));
+    const key=word=>JSON.stringify([word.sourceLanguage,word.targetLanguage,word.text.normalize('NFKC').trim().toLowerCase()]);
+    const spellings=new Set();
+    for(const id of wordIds){
+      const word=byId.get(id);
+      if(!word)throw new Error('A selected word is no longer available. Refresh the list and try again.');
+      spellings.add(key(word));
+    }
+    const matching=words.filter(item=>spellings.has(key(item)));
     const records=new Map((state.knownWords??[]).map(item=>[item.wordId,item]));
     for(const item of matching){
       const updatedAt=Math.max(now,(records.get(item.id)?.updatedAt??-1)+1);

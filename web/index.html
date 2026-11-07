@@ -113,6 +113,10 @@
     </div>
     <p id="library-status" role="status"></p>
     <p id="search-count" role="status"></p>
+    <section class="bulk-word-tools" aria-label="Select multiple words">
+      <div class="bulk-selection-heading"><label><input id="select-visible-words" type="checkbox"> Select visible words</label><span id="selected-word-count" role="status">0 selected</span></div>
+      <div id="bulk-word-actions" hidden><div class="bulk-word-buttons"><button id="bulk-mark-known" class="primary">Mark selected as known</button><button id="bulk-learn-again" class="secondary">Learn selected again</button></div><button id="clear-word-selection" class="text-button">Clear selection</button></div>
+    </section>
     <ul id="search-results"></ul>
     <button id="more-results" class="secondary wide" hidden>Show more results</button>
   </dialog>

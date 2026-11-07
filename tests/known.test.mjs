@@ -1,13 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { openLibrary, snapshot, setWordKnown, saveReview, saveQuickRefresh, restoreBackup, validateBackup, syncPayload, mergeSync } from '../docs/storage.mjs';
+import { openLibrary, snapshot, setWordKnown, setWordsKnown, saveReview, saveQuickRefresh, restoreBackup, validateBackup, syncPayload, mergeSync } from '../docs/storage.mjs';
 import { studyQueue } from '../docs/study.mjs';
 import { knownWordIds, mergeKnownWords } from '../web/known.mjs';
 import { rankedReadings } from '../web/reading.mjs';
 
 test('known words leave both queues without a review, free the daily slot, and survive backup and sync',async t=>{
   const data=new Map();
-  for(const [key,value] of Object.entries({navigator:{},indexedDB:undefined,localStorage:{getItem:key=>data.get(key)??null,setItem:(key,value)=>data.set(key,value)}})){
+  let writes=0;
+  for(const [key,value] of Object.entries({navigator:{},indexedDB:undefined,localStorage:{getItem:key=>data.get(key)??null,setItem:(key,value)=>{writes++;data.set(key,value);}}})){
     const descriptor=Object.getOwnPropertyDescriptor(globalThis,key);
     Object.defineProperty(globalThis,key,{configurable:true,value});
     t.after(()=>{if(descriptor)Object.defineProperty(globalThis,key,descriptor);else delete globalThis[key];});
@@ -55,6 +56,19 @@ test('known words leave both queues without a review, free the daily slot, and s
   // exportedAt is transient; persisted state stays byte-identical on invalid sync.
   assert.deepEqual((await snapshot()).knownWords,JSON.parse(before).knownWords);
   assert.deepEqual((await snapshot()).reviews,JSON.parse(before).reviews);
+  const previous=await snapshot(),beforeWrites=writes;
+  await setWordsKnown(seed.map(word=>word.id),true,now+4);
+  assert.equal(writes,beforeWrites+1,'The whole selection is saved atomically in one write.');
+  const marked=await snapshot();
+  assert.equal(knownWordIds(marked.knownWords).size,3);
+  assert.deepEqual(marked.progress,previous.progress);assert.deepEqual(marked.reviews,previous.reviews);
+  const rawBefore=[...data.values()];
+  await assert.rejects(setWordsKnown([seed[0].id,'missing'],false,now+5),/no longer available/);
+  assert.deepEqual([...data.values()],rawBefore,'An invalid item must not partially unmark the selection.');
+  await assert.rejects(setWordsKnown([],true,now+5),/Select/);
+  await setWordsKnown(seed.map(word=>word.id),false,now+6);
+  assert.equal(knownWordIds((await snapshot()).knownWords).size,0);
+  assert.deepEqual((await snapshot()).progress,previous.progress);
 });
 
 test('known flags merge deterministically and newer learn-again changes win',()=>{

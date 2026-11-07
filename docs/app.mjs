@@ -1,5 +1,5 @@
 import { matchesStroke } from './modules/strokes.mjs';
-import { openLibrary, snapshot, saveReview, saveQuickRefresh, setWordKnown, addWord, importWords, createSet, setMembership, deleteSet, restoreBackup, validateBackup, mergeSync, syncPayload, STORAGE_KEY } from './storage.mjs';
+import { openLibrary, snapshot, saveReview, saveQuickRefresh, setWordsKnown, addWord, importWords, createSet, setMembership, deleteSet, restoreBackup, validateBackup, mergeSync, syncPayload, STORAGE_KEY } from './storage.mjs';
 import { playAudio, stopAudio, audioPreference, availableVoices, englishAccent, prepareWordAudio } from './audio.mjs';
 import { checkAnswer, checkDictation, clozeSentence, mistakeQueue, pinyinChoices, quickRefresh, resumableCard, studyQueue, studySchedule } from './study.mjs';
 import { syncGitHub } from './sync.mjs';
@@ -48,6 +48,8 @@ const grades={Again:'Poor',Hard:'Fair',Good:'Good'};
 const DECKS={zh:{source:'zh-CN',target:'en-US',name:'Chinese → English',labels:['HSK 1','HSK 2','HSK 3','HSK 4','HSK 5','HSK 6','HSK 7–9']},en:{source:'en-US',target:'ru-RU',name:'English → Russian',labels:['A1 · Beginner','A2 · Elementary','B1 · Intermediate','B2 · Upper intermediate','C1 · Advanced','C2 · Proficiency']}};
 let deck=safePreference('hanzi-deck')==='en'?'en':'zh';
 let activeSetId='',browseIndex=[],browseLimit=30;
+const selectedLibraryWords=new Set();
+let visibleLibraryWords=[];
 const activeSet=()=>library.sets.find(set=>set.id===activeSetId&&set.course===deck);
 const deckWords=(course=deck)=>library.words.filter(w=>w.sourceLanguage===DECKS[course].source&&w.targetLanguage===DECKS[course].target);
 mountReading({
@@ -348,12 +350,20 @@ function renderResults(){
   const set=chosenSet(),members=new Set(set?.wordIds),known=knownWordIds(library.knownWords),filter=$('library-status-filter').value;
   const matches=findWords(browseIndex,$('library-query').value).filter(word=>(!$('set-only').checked||members.has(word.id))&&
     (filter==='known'?known.has(word.id):filter==='learning'?!known.has(word.id):true));
+  const matchingIds=new Set(matches.map(word=>word.id));
+  for(const id of selectedLibraryWords)if(!matchingIds.has(id))selectedLibraryWords.delete(id);
+  visibleLibraryWords=matches.slice(0,browseLimit);
   $('set-actions').hidden=!set;
   $('study-set').disabled=!set?.wordIds.length;
   $('search-count').textContent=`${matches.length.toLocaleString()} ${matches.length===1?'word':'words'}`;
   $('more-results').hidden=matches.length<=browseLimit;
-  $('search-results').replaceChildren(...matches.slice(0,browseLimit).map(word=>{
+  $('search-results').replaceChildren(...visibleLibraryWords.map(word=>{
     const row=document.createElement('li'),text=document.createElement('div'),title=document.createElement('strong'),detail=document.createElement('small');
+    const selection=document.createElement('label'),checkbox=document.createElement('input');
+    selection.className='word-select';checkbox.type='checkbox';checkbox.checked=selectedLibraryWords.has(word.id);
+    checkbox.setAttribute('aria-label',`Select ${word.text}`);checkbox.dataset.wordId=word.id;
+    checkbox.onchange=()=>{if(checkbox.checked)selectedLibraryWords.add(word.id);else selectedLibraryWords.delete(word.id);renderBulkSelection();};
+    selection.append(checkbox);row.append(selection);
     title.textContent=word.text;title.lang=word.sourceLanguage;
     detail.textContent=`${word.reading} · ${word.translation}`;
     text.append(title,detail);row.append(text);
@@ -373,7 +383,28 @@ function renderResults(){
     row.append(actions);
     return row;
   }));
+  renderBulkSelection();
 }
+function renderBulkSelection(){
+  const count=selectedLibraryWords.size,visibleSelected=visibleLibraryWords.filter(word=>selectedLibraryWords.has(word.id)).length;
+  $('selected-word-count').textContent=`${count} selected`;
+  $('select-visible-words').checked=Boolean(visibleLibraryWords.length)&&visibleSelected===visibleLibraryWords.length;
+  $('select-visible-words').indeterminate=visibleSelected>0&&visibleSelected<visibleLibraryWords.length;
+  $('select-visible-words').disabled=busy||!visibleLibraryWords.length;
+  $('bulk-word-actions').hidden=!count;
+  for(const id of ['bulk-mark-known','bulk-learn-again','clear-word-selection'])$(id).disabled=busy||!count;
+  for(const checkbox of document.querySelectorAll('#search-results input[type=checkbox]'))checkbox.disabled=busy;
+}
+$('select-visible-words').onchange=event=>{
+  if(busy)return;
+  for(const word of visibleLibraryWords){if(event.target.checked)selectedLibraryWords.add(word.id);else selectedLibraryWords.delete(word.id);}
+  for(const checkbox of document.querySelectorAll('#search-results input[type=checkbox]'))checkbox.checked=selectedLibraryWords.has(checkbox.dataset.wordId);
+  renderBulkSelection();
+};
+$('clear-word-selection').onclick=()=>{if(!busy){selectedLibraryWords.clear();renderResults();}};
+const selectedWords=()=>browseIndex.filter(entry=>selectedLibraryWords.has(entry.word.id)).map(entry=>entry.word);
+$('bulk-mark-known').onclick=()=>changeKnownWords(selectedWords(),true,true);
+$('bulk-learn-again').onclick=()=>changeKnownWords(selectedWords(),false,true);
 function refreshLibrary(selected=''){
   browseIndex=indexWords(deckWords(browseCourse()));
   const sets=library.sets.filter(set=>set.course===browseCourse());
@@ -395,36 +426,41 @@ async function changeSets(change,selected=''){
     }
     return true;
   }catch(error){$('library-status').textContent=error.message;}
-  finally{busy=false;}
+  finally{busy=false;renderBulkSelection();}
 }
 $('open-library').onclick=()=>{
   if(!library||busy)return;
   $('library-course').value=deck;$('library-query').value='';$('set-only').checked=false;$('library-status-filter').value='all';
-  $('library-status').textContent='';browseLimit=30;
+  $('library-status').textContent='';browseLimit=30;selectedLibraryWords.clear();
   refreshLibrary(activeSetId);openPanel('library-dialog');
 };
-$('library-course').onchange=()=>{browseLimit=30;$('set-only').checked=false;refreshLibrary();};
-$('library-query').oninput=$('set-only').onchange=$('library-status-filter').onchange=()=>{browseLimit=30;renderResults();};
-async function changeKnown(word,known){
-  if(busy||!library)return;
-  busy=true;$('mark-known').disabled=true;
+$('library-course').onchange=()=>{browseLimit=30;selectedLibraryWords.clear();$('set-only').checked=false;refreshLibrary();};
+$('library-query').oninput=$('set-only').onchange=$('library-status-filter').onchange=()=>{browseLimit=30;selectedLibraryWords.clear();renderResults();};
+const changeKnown=(word,known)=>changeKnownWords([word],known);
+async function changeKnownWords(words,known,bulk=false){
+  if(busy||!library||!words.length)return;
+  busy=true;$('mark-known').disabled=true;renderBulkSelection();
+  const scopeControls=['library-course','library-query','library-status-filter','library-set','set-only','more-results'];
+  scopeControls.forEach(id=>$(id).disabled=true);
   try{
-    await setWordKnown(word.id,known);await reload();showNext();
+    await setWordsKnown(words.map(word=>word.id),known);await reload();showNext();
+    if(bulk)selectedLibraryWords.clear();
     if($('library-dialog').open)refreshLibrary($('library-set').value);
-    const message=known?`“${word.text}” is marked as known and excluded from study.`:`“${word.text}” is back in your study queue.`;
+    const subject=bulk?`${words.length} selected ${words.length===1?'word':'words'}`:`“${words[0].text}”`;
+    const message=known?`${subject} marked as known and excluded from study.`:`${subject} returned to study.`;
     if($('library-dialog').open)$('library-status').textContent=message;
     notify(message);
-    if(known){
+    if(known&&!bulk){
       const undo=document.createElement('button');undo.className='text-button';undo.textContent='Undo';
-      undo.onclick=()=>changeKnown(word,false);$('notice').append(' ',undo);
+      undo.onclick=()=>changeKnown(words[0],false);$('notice').append(' ',undo);
     }
   }catch(error){
     if($('library-dialog').open)$('library-status').textContent=error.message;
     else notify(error.message);
-  }finally{busy=false;$('mark-known').disabled=false;}
+  }finally{busy=false;$('mark-known').disabled=false;scopeControls.forEach(id=>$(id).disabled=false);renderBulkSelection();}
 }
 $('mark-known').onclick=()=>{if(card)void changeKnown(card,true);};
-$('library-set').onchange=()=>{browseLimit=30;$('set-only').checked=false;renderResults();};
+$('library-set').onchange=()=>{browseLimit=30;selectedLibraryWords.clear();$('set-only').checked=false;renderResults();};
 $('more-results').onclick=()=>{browseLimit+=30;renderResults();};
 $('create-set').onsubmit=async event=>{
   event.preventDefault();
