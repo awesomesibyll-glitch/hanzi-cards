@@ -1,7 +1,19 @@
 // Original bilingual mini-dialogues. Levels describe reading difficulty approximately.
+const englishBasics=`minutes||минуты
+does||вспомогательный глагол в вопросе (he/she/it)
+your||твой; ваш
+is||есть; является (форма to be)
+looks||выглядит
+checks||проверки
+later||позже
+suggests||указывает на; позволяет предположить
+has been||был; оказался (present perfect)
+be||быть
+are||есть; являются (форма to be)
+us||нас; нам`;
 const text=(id,course,level,title,lines,glossary)=>({id,course,level,title,
   lines:lines.map(([speaker,text,translation])=>({speaker,text,translation})),
-  glossary:glossary.split('\n').filter(Boolean).map(row=>{
+  glossary:(course==='en'?englishBasics+'\n'+glossary:glossary).split('\n').filter(Boolean).map(row=>{
     const [text,reading,translation]=row.split('|');return {text,reading,translation};
   })});
 

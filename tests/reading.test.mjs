@@ -1,5 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { gunzipSync } from 'node:zlib';
 import { miniTexts } from '../web/reading-data.mjs';
 import { readingIndex, readingTokens, readingCoverage, rankedReadings, readingCard } from '../web/reading.mjs';
 
@@ -46,5 +48,18 @@ test('every dialogue has bilingual context, meaningful glossary and Chinese piny
     assert.ok(story.lines.length>=4);assert.ok(story.glossary.length>=7);
     for(const line of story.lines){assert.ok(line.text.trim());assert.ok(line.translation.trim());}
     for(const word of story.glossary){assert.ok(word.text.trim());assert.ok(word.translation.trim());if(story.course==='zh')assert.ok(word.reading.trim());}
+  }
+});
+
+test('every lexical word in the shipped dialogues has a tappable translation offline',()=>{
+  const catalog=JSON.parse(readFileSync(new URL('../web/data/catalog.json',import.meta.url),'utf8'));
+  const words=JSON.parse(gunzipSync(Buffer.concat(catalog.packs.words.map(file=>readFileSync(new URL('../web/data/'+file,import.meta.url))))));
+  for(const story of miniTexts){
+    const index=readingIndex(story,words);
+    for(const line of story.lines){
+      const tokens=readingTokens(line.text,index);
+      assert.equal(tokens.map(token=>token.text).join(''),line.text);
+      for(const token of tokens)if(!token.word)assert.doesNotMatch(token.text,/\p{L}/u,`${story.id}: ${token.text}`);
+    }
   }
 });
