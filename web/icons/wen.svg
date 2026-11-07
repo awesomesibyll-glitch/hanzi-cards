@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <title>Wen — language, remembered</title>
+  <defs>
+    <linearGradient id="porcelain" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#f2faff"/>
+      <stop offset="1" stop-color="#d3e9f2"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#porcelain)"/>
+  <path d="M365 361 C331 393 283 410 236 401 C155 390 103 328 108 250 C110 170 175 112 250 109 C322 105 380 151 397 212" stroke="#719bac" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="399" cy="237" r="5" fill="#719bac"/>
+  <g fill="#294f61">
+    <path d="M244 165 C256 168 269 181 274 192 C269 199 261 202 254 200 C253 188 249 176 244 165 Z"/>
+    <path d="M169 216 C222 218 290 213 343 205 L348 222 C292 225 222 229 174 232 Z"/>
+    <path d="M290 228 L307 237 C285 292 245 326 177 349 L169 343 C231 314 270 280 290 228 Z"/>
+    <path d="M211 237 C234 279 279 315 345 329 L335 348 C275 325 231 289 203 242 Z"/>
+  </g>
+  <rect x="366" y="306" width="27" height="27" rx="5" fill="#c88f79"/>
+  <path d="M375 313 L375 325 M375 319 L384 319 M384 313 L384 325" stroke="#fff7ee" stroke-width="2" stroke-linecap="round"/>
+</svg>
