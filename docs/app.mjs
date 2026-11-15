@@ -1,6 +1,6 @@
 import { mountWordEditor } from './word-edits.mjs';
 import { matchesStroke } from './modules/strokes.mjs';
-import { openLibrary, snapshot, saveReview, saveQuickRefresh, setWordsKnown, setConfusion, saveWordEdit, addToStudy, saveFavouritePhrase, addWord, importWords, createSet, setMembership, deleteSet, restoreBackup, validateBackup, mergeSync, syncPayload, STORAGE_KEY } from './storage.mjs';
+import { openLibrary, snapshot, saveReview, saveQuickRefresh, setWordsKnown, setConfusion, saveWordEdit, addToStudy, addCurrentLesson, saveFavouritePhrase, addWord, importWords, createSet, setMembership, deleteSet, restoreBackup, validateBackup, mergeSync, syncPayload, STORAGE_KEY } from './storage.mjs';
 import { playAudio, stopAudio, audioPreference, availableVoices, englishAccent, prepareWordAudio } from './audio.mjs';
 import { checkAnswer, checkDictation, clozeSentence, mistakeQueue, pinyinChoices, quickRefresh, resumableCard, studyQueue, studySchedule } from './study.mjs';
 import { syncGitHub } from './sync.mjs';
@@ -398,6 +398,20 @@ $('auto-audio').onchange=()=>{safePreference('hanzi-auto-audio',String($('auto-a
 $('open-menu').onclick=()=>$('menu-dialog').showModal();
 $('leave-set').onclick=()=>{if(!busy){activeSetId='';showNext();}};
 const browseCourse=()=>$('library-course').value;
+$('current-lesson').onclick=async()=>{
+  if(busy||!library)return;
+  busy=true;
+  try{
+    const setId=await addCurrentLesson(deck==='zh'?activeSet()?.id:undefined);
+    await reload();
+    $('menu-dialog').close();
+    deck='zh';safePreference('hanzi-deck',deck);activeSetId=setId;
+    mistakeSession=false;completedMistakes.clear();options();showNext();
+    notify('33 lesson words added. Your review dates and daily limit apply.');
+  }catch(error){
+    $('menu-dialog').close();notify(error.message);
+  }finally{busy=false;}
+};
 const chosenSet=()=>library.sets.find(set=>set.id===$('library-set').value&&set.course===browseCourse());
 function renderResults(){
   const set=chosenSet(),members=new Set(set?.wordIds),known=knownWordIds(library.knownWords),filter=$('library-status-filter').value;

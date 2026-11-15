@@ -3,6 +3,11 @@ const accents={'en-US':'us','en-GB':'uk'};
 const positive=new Map();
 const missing=new Set();
 const pending=new Map();
+const lessonRecordings=new Map([
+  ['昨天',['zuótiān','LL-Q9192 (cmn)-Vickylin77amis-昨天.wav']],
+  ['北京',['běijīng','Beijing pronunciation.ogg']],
+  ['英国',['yīngguó','LL-Q9192 (cmn)-Luilui6666-英国.wav']]
+]);
 
 export async function isAudioClip(blob){
   if(!blob.size||blob.size>500_000)return false;
@@ -34,6 +39,8 @@ export function commonsTitles(text,language,reading=''){
     if(!/^[\p{Script=Han}]+$/u.test(text)||text.length>32)return [];
     const pinyin=reading.normalize('NFC').toLowerCase().replace(/[\s'’]/g,'');
     const byReading=/^[\p{Script=Latin}\p{M}]+$/u.test(pinyin)?[`Zh-${pinyin}.ogg`,`Cmn-${pinyin}.ogg`]:[];
+    const lesson=lessonRecordings.get(text);
+    if(lesson?.[0]===pinyin)byReading.unshift(lesson[1]);
     if([...text].length===1)return byReading;
     return [...byReading,`LL-Q9192 (cmn)-CanonNi-${text}.wav`,`Cmn-${text}.ogg`,`Zh-${text}.ogg`];
   }
@@ -67,7 +74,8 @@ async function commonsRecording(text,language,reading,signal){
         !license?.startsWith('https://creativecommons.org/'))continue;
     if(language==='zh-CN'){
       const linguaLibre=page.title===`File:LL-Q9192 (cmn)-CanonNi-${text}.wav`;
-      if(!linguaLibre&&(!/(mandarin|standard chinese|in chinese)/i.test(description)||/cantonese|hokkien|shanghainese/i.test(description)))continue;
+      const verifiedLesson=page.title===`File:${lessonRecordings.get(text)?.[1]}`;
+      if(!linguaLibre&&!verifiedLesson&&(!/(mandarin|standard chinese|in chinese)/i.test(description)||/cantonese|hokkien|shanghainese/i.test(description)))continue;
     }else if(!(language==='en-GB'?/^File:En-(uk|gb)-/i:/^File:En-us-/i).test(page.title))continue;
     return {url:info.url,source,license,artist:plain(metadata?.Artist?.value).slice(0,150)};
   }

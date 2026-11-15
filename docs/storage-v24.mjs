@@ -3,6 +3,7 @@ import { studyQueue, studySchedule, withContext } from './study-v23.mjs';
 import { importWordKey } from './import-list.mjs';
 import { knownWordIds, validateKnownWords, mergeKnownWords } from './known.mjs';
 import { pairKey, validateConfusions, mergeConfusions } from './confusions-v22.mjs';
+import { currentLesson } from './current-lesson.mjs';
 export const RATINGS = ['Again', 'Hard', 'Good', 'Easy'];
 export const STORAGE_KEY = 'hanzi-study-v4';
 let catalog;
@@ -204,7 +205,11 @@ export async function setMembership(setId,wordId,include){
 export async function addToStudy(wordIds,course,setId='',now=Date.now()){
   if(!Array.isArray(wordIds)||!wordIds.length||wordIds.length>30000||!Object.hasOwn(courseLanguages,course)||!Number.isSafeInteger(now)||now<0||now>8e15-1)throw new Error('Select words from one course.');
   let destination;
-  await update(state=>{
+  await update(state=>{destination=addToStudyState(state,wordIds,course,setId,now);});
+  return destination;
+}
+
+function addToStudyState(state,wordIds,course,setId,now){
     const words=[...catalog.values(),...state.words],byId=new Map(words.map(word=>[word.id,word]));
     const chosen=[...new Set(wordIds)].map(id=>byId.get(id));
     if(chosen.some(word=>!inCourse(word,course)))throw new Error('A selected word is unavailable in this course.');
@@ -225,7 +230,28 @@ export async function addToStudy(wordIds,course,setId='',now=Date.now()){
     for(const word of words)if(spellings.has(key(word))&&records.get(word.id)?.known){
       const previous=records.get(word.id);records.set(word.id,{wordId:word.id,known:false,updatedAt:Math.max(now,previous.updatedAt+1)});
     }
-    state.knownWords=[...records.values()];destination=set.id;
+    state.knownWords=[...records.values()];return set.id;
+}
+
+export async function addCurrentLesson(setId='',now=Date.now()){
+  let destination;
+  await update(state=>{
+    const words=[...catalog.values(),...state.words];
+    const edits=new Map((state.wordEdits??[]).map(edit=>[edit.wordId,edit]));
+    const byText=new Map(words.filter(word=>inCourse(word,'zh')).reverse().map(word=>[word.text,word]));
+    const ids=[];
+    for(const {text,...fields} of currentLesson){
+      let word=byText.get(text);
+      if(!word){
+        word={...fields,text,id:`custom-lesson-${text}`,sourceLanguage:'zh-CN',targetLanguage:'en-US',level:1,topic:'Dates and introductions',contextKind:'example'};
+        validateWords([word]);state.words.push(word);
+      }else if(!edits.has(word.id)){
+        edits.set(word.id,{...fields,wordId:word.id,active:true,updatedAt:now});
+      }
+      ids.push(word.id);
+    }
+    state.wordEdits=[...edits.values()];
+    destination=addToStudyState(state,ids,'zh',setId,now);
   });
   return destination;
 }
